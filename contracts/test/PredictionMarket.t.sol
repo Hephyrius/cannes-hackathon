@@ -3,6 +3,7 @@ pragma solidity ^0.8.25;
 
 import "forge-std/Test.sol";
 import "../src/PredictionMarket.sol";
+import "../src/YesNoToken.sol";
 
 contract MockUSDC is ERC20 {
     constructor() ERC20("Mock USDC", "USDC") {}
@@ -14,6 +15,7 @@ contract MockUSDC is ERC20 {
 contract PredictionMarketTest is Test {
     MockUSDC usdc;
     PredictionMarket market;
+    YesNoToken yesNoToken;
     address alice = address(0x1);
     address bob = address(0x2);
     uint256 constant USDC_UNIT = 1e6;
@@ -27,6 +29,7 @@ contract PredictionMarketTest is Test {
         usdc.approve(address(market), type(uint256).max);
         vm.prank(bob);
         usdc.approve(address(market), type(uint256).max);
+        yesNoToken = YesNoToken(address(market.yesNoToken()));
     }
 
     function testPurchaseTokens() public {
@@ -75,17 +78,17 @@ contract PredictionMarketTest is Test {
         vm.warp(block.timestamp + 2 days);
         market.resolveMarket(PredictionMarket.Outcome.NO);
         
-        // Alice has YES, NO, and POWER tokens, but only NO is the winner
+        // Alice has YES, NO, and YES-NO tokens, but only NO is the winner
         // The redeemWinningTokens function automatically redeems the winning token type
         // So when NO is the winner, it will try to redeem NO tokens
         vm.prank(alice);
         market.redeemWinningTokens(1);
         
-        // Verify Alice's NO tokens were burned but YES and POWER tokens remain
-        (uint256 yesBal, uint256 noBal, uint256 powerBal) = market.getUserBalances(alice);
+        // Verify Alice's NO tokens were burned but YES and YES-NO tokens remain
+        (uint256 yesBal, uint256 noBal, uint256 yesNoBal) = market.getUserBalances(alice);
         assertEq(yesBal, 1); // YES tokens still there (losing outcome)
         assertEq(noBal, 0);  // NO tokens burned (winning outcome)
-        assertEq(powerBal, 1); // POWER tokens still there (losing outcome)
+        assertEq(yesNoBal, 1); // YES-NO tokens still there (losing outcome)
         
         // Verify Alice received USDC for her winning tokens
         assertEq(usdc.balanceOf(alice), 10 * USDC_UNIT);

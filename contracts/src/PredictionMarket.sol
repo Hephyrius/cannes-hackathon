@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "./YesNoToken.sol";
 
 /**
  * @title PredictionMarket
@@ -17,7 +18,7 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
     // Token contracts for yes, no, and power tokens
     YesToken public yesToken;
     NoToken public noToken;
-    PowerToken public powerToken;
+    YesNoToken public yesNoToken;
     
     // Market state
     enum MarketState { OPEN, RESOLVED }
@@ -50,7 +51,7 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
         // Deploy token contracts
         yesToken = new YesToken();
         noToken = new NoToken();
-        powerToken = new PowerToken();
+        yesNoToken = new YesNoToken();
         
         emit MarketCreated(_question, _resolutionTime);
     }
@@ -72,7 +73,7 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
         // Mint tokens to user
         yesToken.mint(msg.sender, tokenAmount);
         noToken.mint(msg.sender, tokenAmount);
-        powerToken.mint(msg.sender, tokenAmount);
+        yesNoToken.mint(msg.sender, tokenAmount);
         
         emit TokensPurchased(msg.sender, tokenAmount, tokenAmount, tokenAmount);
     }
@@ -108,8 +109,8 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
             require(noToken.balanceOf(msg.sender) >= amount, "Insufficient NO tokens");
             noToken.burn(msg.sender, amount);
         } else if (winningOutcome == Outcome.POWER) {
-            require(powerToken.balanceOf(msg.sender) >= amount, "Insufficient POWER tokens");
-            powerToken.burn(msg.sender, amount);
+            require(yesNoToken.balanceOf(msg.sender) >= amount, "Insufficient YES-NO tokens");
+            yesNoToken.burn(msg.sender, amount);
         }
         
         // Transfer USDC to user
@@ -132,7 +133,7 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
     ) {
         yesBalance = yesToken.balanceOf(user);
         noBalance = noToken.balanceOf(user);
-        powerBalance = powerToken.balanceOf(user);
+        powerBalance = yesNoToken.balanceOf(user);
     }
     
     /**
@@ -176,31 +177,6 @@ contract NoToken is ERC20 {
     address public predictionMarket;
     
     constructor() ERC20("NO Token", "NO") {
-        predictionMarket = msg.sender;
-    }
-    
-    modifier onlyPredictionMarket() {
-        require(msg.sender == predictionMarket, "Only prediction market can call");
-        _;
-    }
-    
-    function mint(address to, uint256 amount) external onlyPredictionMarket {
-        _mint(to, amount);
-    }
-    
-    function burn(address from, uint256 amount) external onlyPredictionMarket {
-        _burn(from, amount);
-    }
-}
-
-/**
- * @title PowerToken
- * @dev ERC20 token representing POWER outcome
- */
-contract PowerToken is ERC20 {
-    address public predictionMarket;
-    
-    constructor() ERC20("POWER Token", "POWER") {
         predictionMarket = msg.sender;
     }
     
