@@ -264,6 +264,9 @@ contract OutcomeFundingTest is Test {
         funding.fund(500e6);
         vm.stopPrank();
         
+        vm.warp(block.timestamp + FUNDING_DURATION + 1);
+        funding.completeFundingRound();
+        
         vm.startPrank(alice);
         vm.expectRevert("Insufficient tokens to propose");
         funding.createProposal(
@@ -406,6 +409,9 @@ contract OutcomeFundingTest is Test {
         funding.fund(6000e6);
         vm.stopPrank();
         
+        vm.warp(block.timestamp + FUNDING_DURATION + 1);
+        funding.completeFundingRound();
+        
         // Set lower proposal threshold
         vm.prank(owner);
         funding.setProposalThreshold(1000e6);
@@ -443,6 +449,9 @@ contract OutcomeFundingTest is Test {
         usdc.approve(address(funding), 4000e6);
         funding.fund(4000e6);
         vm.stopPrank();
+        
+        vm.warp(block.timestamp + FUNDING_DURATION + 1);
+        funding.completeFundingRound();
         
         // Set lower proposal threshold
         vm.prank(owner);
@@ -1226,5 +1235,301 @@ contract OutcomeFundingTest is Test {
         
         // Should handle large numbers without overflow
         assertEq(usdc.balanceOf(alice), 500000e6);
+    }
+    
+    // Additional tests for 100% coverage
+    
+    function testRevenueStreamMapping() public {
+        vm.prank(owner);
+        funding.startFundingRound(FUNDING_TARGET, FUNDING_DURATION);
+        
+        vm.startPrank(owner);
+        usdc.approve(address(funding), 1000e6);
+        funding.addRevenue("Test Source", 1000e6, "Test Description");
+        vm.stopPrank();
+        
+        // Test that revenue stream was created and can be accessed
+        assertEq(funding.nextRevenueId(), 2);
+    }
+    
+    function testProposalExecutionData() public {
+        vm.prank(owner);
+        funding.startFundingRound(FUNDING_TARGET, FUNDING_DURATION);
+        
+        vm.startPrank(alice);
+        usdc.approve(address(funding), FUNDING_TARGET);
+        funding.fund(FUNDING_TARGET);
+        vm.stopPrank();
+        
+        vm.warp(block.timestamp + FUNDING_DURATION + 1);
+        funding.completeFundingRound();
+        
+        vm.prank(owner);
+        funding.setProposalThreshold(1000e6);
+        
+        bytes memory executionData = abi.encode("complex data", 123, true);
+        vm.startPrank(alice);
+        uint256 proposalId = funding.createProposal(
+            "Complex Proposal",
+            "Description with execution data",
+            1000e6,
+            OutcomeFunding.ProposalType.INFRASTRUCTURE,
+            executionData
+        );
+        
+        funding.vote(proposalId, true);
+        vm.stopPrank();
+        
+        vm.warp(block.timestamp + 3 days + 1);
+        funding.executeProposal(proposalId);
+        
+        (, , , , , , , bool executed, bool approved, ) = funding.getProposal(proposalId);
+        assertTrue(executed);
+        assertTrue(approved);
+    }
+    
+    function testMultipleProposalsSameUser() public {
+        vm.prank(owner);
+        funding.startFundingRound(FUNDING_TARGET, FUNDING_DURATION);
+        
+        vm.startPrank(alice);
+        usdc.approve(address(funding), FUNDING_TARGET);
+        funding.fund(FUNDING_TARGET);
+        vm.stopPrank();
+        
+        vm.warp(block.timestamp + FUNDING_DURATION + 1);
+        funding.completeFundingRound();
+        
+        vm.prank(owner);
+        funding.setProposalThreshold(1000e6);
+        
+        vm.startPrank(alice);
+        uint256 proposal1 = funding.createProposal("Proposal 1", "Desc 1", 1000e6, OutcomeFunding.ProposalType.MARKETING, "");
+        uint256 proposal2 = funding.createProposal("Proposal 2", "Desc 2", 1000e6, OutcomeFunding.ProposalType.RESEARCH, "");
+        uint256 proposal3 = funding.createProposal("Proposal 3", "Desc 3", 1000e6, OutcomeFunding.ProposalType.LOBBYING, "");
+        vm.stopPrank();
+        
+        assertEq(proposal1, 1);
+        assertEq(proposal2, 2);
+        assertEq(proposal3, 3);
+    }
+    
+    function testVoteOnMultipleProposals() public {
+        vm.prank(owner);
+        funding.startFundingRound(FUNDING_TARGET, FUNDING_DURATION);
+        
+        vm.startPrank(alice);
+        usdc.approve(address(funding), FUNDING_TARGET);
+        funding.fund(FUNDING_TARGET);
+        vm.stopPrank();
+        
+        vm.warp(block.timestamp + FUNDING_DURATION + 1);
+        funding.completeFundingRound();
+        
+        vm.prank(owner);
+        funding.setProposalThreshold(1000e6);
+        
+        vm.startPrank(alice);
+        uint256 proposal1 = funding.createProposal("Proposal 1", "Desc 1", 1000e6, OutcomeFunding.ProposalType.MARKETING, "");
+        uint256 proposal2 = funding.createProposal("Proposal 2", "Desc 2", 1000e6, OutcomeFunding.ProposalType.RESEARCH, "");
+        vm.stopPrank();
+        
+        vm.startPrank(bob);
+        usdc.approve(address(funding), FUNDING_TARGET);
+        funding.fund(FUNDING_TARGET);
+        vm.stopPrank();
+        
+        vm.startPrank(alice);
+        funding.vote(proposal1, true);
+        funding.vote(proposal2, false);
+        vm.stopPrank();
+        
+        vm.startPrank(bob);
+        funding.vote(proposal1, false);
+        funding.vote(proposal2, true);
+        vm.stopPrank();
+        
+        assertTrue(funding.hasVoted(alice, proposal1));
+        assertTrue(funding.hasVoted(alice, proposal2));
+        assertTrue(funding.hasVoted(bob, proposal1));
+        assertTrue(funding.hasVoted(bob, proposal2));
+    }
+    
+    function testRevenueDistributionPrecision() public {
+        vm.prank(owner);
+        funding.startFundingRound(FUNDING_TARGET, FUNDING_DURATION);
+        
+        vm.startPrank(alice);
+        usdc.approve(address(funding), 1);
+        funding.fund(1);
+        vm.stopPrank();
+        
+        vm.startPrank(bob);
+        usdc.approve(address(funding), 9999e6);
+        funding.fund(9999e6);
+        vm.stopPrank();
+        
+        vm.startPrank(owner);
+        usdc.approve(address(funding), 1000e6);
+        funding.addRevenue("Test", 1000e6, "Description");
+        vm.stopPrank();
+        
+        vm.prank(alice);
+        funding.claimRevenue();
+        
+        vm.prank(bob);
+        funding.claimRevenue();
+        
+        // Total distributed should equal total revenue
+        (, , , , , , uint256 totalDistributed) = funding.getFundingRoundInfo();
+        assertEq(totalDistributed, 1000e6);
+    }
+    
+    function testEmergencyWithdrawMultipleUsers() public {
+        vm.prank(owner);
+        funding.startFundingRound(FUNDING_TARGET, FUNDING_DURATION);
+        
+        vm.startPrank(alice);
+        usdc.approve(address(funding), 3000e6);
+        funding.fund(3000e6);
+        vm.stopPrank();
+        
+        vm.startPrank(bob);
+        usdc.approve(address(funding), 4000e6);
+        funding.fund(4000e6);
+        vm.stopPrank();
+        
+        vm.startPrank(charlie);
+        usdc.approve(address(funding), 3000e6);
+        funding.fund(3000e6);
+        vm.stopPrank();
+        
+        vm.warp(block.timestamp + FUNDING_DURATION + 1);
+        funding.completeFundingRound();
+        
+        uint256 aliceBalanceBefore = usdc.balanceOf(alice);
+        uint256 bobBalanceBefore = usdc.balanceOf(bob);
+        uint256 charlieBalanceBefore = usdc.balanceOf(charlie);
+        
+        vm.prank(alice);
+        funding.emergencyWithdraw();
+        
+        vm.prank(bob);
+        funding.emergencyWithdraw();
+        
+        vm.prank(charlie);
+        funding.emergencyWithdraw();
+        
+        // All users should get their proportional share back
+        assertEq(usdc.balanceOf(alice), aliceBalanceBefore + 3000e6);
+        assertEq(usdc.balanceOf(bob), bobBalanceBefore + 4000e6);
+        assertEq(usdc.balanceOf(charlie), charlieBalanceBefore + 3000e6);
+    }
+    
+    function testMinimumVotingPeriodEdgeCases() public {
+        vm.prank(owner);
+        funding.setMinimumVotingPeriod(0);
+        assertEq(funding.minimumVotingPeriod(), 0);
+        
+        vm.prank(owner);
+        funding.setMinimumVotingPeriod(365 days);
+        assertEq(funding.minimumVotingPeriod(), 365 days);
+    }
+    
+    function testProposalThresholdEdgeCases() public {
+        vm.prank(owner);
+        funding.setProposalThreshold(0);
+        assertEq(funding.proposalThreshold(), 0);
+        
+        vm.prank(owner);
+        funding.setProposalThreshold(1000000e6);
+        assertEq(funding.proposalThreshold(), 1000000e6);
+    }
+    
+    function testFundingRoundEdgeCases() public {
+        vm.prank(owner);
+        funding.startFundingRound(1, 1);
+        
+        vm.startPrank(alice);
+        usdc.approve(address(funding), 1);
+        funding.fund(1);
+        vm.stopPrank();
+        
+        vm.warp(block.timestamp + 2);
+        funding.completeFundingRound();
+        
+        (, , , , bool successful, , ) = funding.getFundingRoundInfo();
+        assertTrue(successful);
+    }
+    
+    function testRevenueStreamEdgeCases() public {
+        vm.prank(owner);
+        funding.startFundingRound(FUNDING_TARGET, FUNDING_DURATION);
+        
+        vm.startPrank(owner);
+        usdc.approve(address(funding), 1);
+        funding.addRevenue("Minimal", 1, "Minimal revenue");
+        vm.stopPrank();
+        
+        vm.startPrank(owner);
+        usdc.approve(address(funding), 1000000e6);
+        funding.addRevenue("Large", 1000000e6, "Large revenue");
+        vm.stopPrank();
+        
+        (, , , , , uint256 totalRevenue, ) = funding.getFundingRoundInfo();
+        assertEq(totalRevenue, 1 + 1000000e6);
+    }
+    
+    function testProposalVotingEdgeCases() public {
+        vm.prank(owner);
+        funding.startFundingRound(FUNDING_TARGET, FUNDING_DURATION);
+        
+        vm.startPrank(alice);
+        usdc.approve(address(funding), FUNDING_TARGET);
+        funding.fund(FUNDING_TARGET);
+        vm.stopPrank();
+        
+        vm.warp(block.timestamp + FUNDING_DURATION + 1);
+        funding.completeFundingRound();
+        
+        vm.prank(owner);
+        funding.setProposalThreshold(1000e6);
+        
+        vm.startPrank(alice);
+        uint256 proposalId = funding.createProposal("Test", "Desc", 1000e6, OutcomeFunding.ProposalType.MARKETING, "");
+        
+        // Vote at the exact deadline
+        vm.warp(block.timestamp + 3 days);
+        funding.vote(proposalId, true);
+        vm.stopPrank();
+        
+        vm.warp(block.timestamp + 1);
+        vm.expectRevert("Voting period ended");
+        funding.vote(proposalId, false);
+    }
+    
+    function testCompleteCoverage() public {
+        // This test ensures we cover all remaining code paths
+        vm.prank(owner);
+        funding.startFundingRound(FUNDING_TARGET, FUNDING_DURATION);
+        
+        vm.startPrank(alice);
+        usdc.approve(address(funding), FUNDING_TARGET);
+        funding.fund(FUNDING_TARGET);
+        vm.stopPrank();
+        
+        vm.startPrank(owner);
+        usdc.approve(address(funding), 1000e6);
+        funding.addRevenue("Final Test", 1000e6, "Final test revenue");
+        vm.stopPrank();
+        
+        vm.prank(alice);
+        funding.claimRevenue();
+        
+        // Verify all state changes
+        assertEq(funding.balanceOf(alice), FUNDING_TARGET);
+        assertEq(funding.totalSupply(), FUNDING_TARGET);
+        assertEq(funding.nextRevenueId(), 2);
+        assertEq(funding.nextProposalId(), 1);
     }
 } 
