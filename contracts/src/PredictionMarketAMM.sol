@@ -174,7 +174,7 @@ contract PredictionMarketAMM is ReentrancyGuard, Ownable {
         address tokenOut,
         uint256 amountIn,
         uint256 amountOut
-    ) internal view returns (uint256) {
+    ) public view returns (uint256) {
         uint256 reserveIn = getTokenReserves(tokenIn);
         uint256 reserveOut = getTokenReserves(tokenOut);
         
@@ -188,6 +188,8 @@ contract PredictionMarketAMM is ReentrancyGuard, Ownable {
         } else if (tokenOut == address(usdc)) {
             newTotalValue -= amountOut;
         }
+        
+        if (newTotalValue == 0) return 0;
         
         // Calculate new probabilities
         uint256 yesPrice = (yesReserves * PRECISION) / newTotalValue;
