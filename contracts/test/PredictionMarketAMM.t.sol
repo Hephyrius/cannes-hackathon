@@ -28,7 +28,7 @@ contract PredictionMarketAMMTest is Test {
     function setUp() public {
         usdc = new MockUSDC();
         market = new PredictionMarket(address(usdc), "Test Market", block.timestamp + 1 days);
-        factory = new PredictionMarketFactory(address(this));
+        factory = new PredictionMarketFactory(address(this), address(usdc));
         
         // Mint USDC to test accounts
         usdc.mint(alice, 1000 * USDC_UNIT);

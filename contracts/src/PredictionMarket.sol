@@ -32,11 +32,16 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
     uint256 public resolutionTime;
     uint256 public constant TOKEN_PRICE = 1e6; // 1 USDC (6 decimals)
     
+    // NFT integration
+    address public nftContract;
+    uint256 public nftTokenId;
+    
     // Events
     event MarketCreated(string question, uint256 resolutionTime);
     event TokensPurchased(address buyer, uint256 yesAmount, uint256 noAmount, uint256 powerAmount);
     event MarketResolved(Outcome outcome);
     event TokensRedeemed(address redeemer, Outcome outcome, uint256 amount);
+    event NFTLinked(address nftContract, uint256 tokenId);
     
     constructor(
         address _usdc,
@@ -141,6 +146,31 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
      */
     function getContractBalance() external view returns (uint256) {
         return usdc.balanceOf(address(this));
+    }
+    
+    /**
+     * @dev Link NFT to this market (only owner)
+     */
+    function linkNFT(address _nftContract, uint256 _tokenId) external onlyOwner {
+        require(nftContract == address(0), "NFT already linked");
+        nftContract = _nftContract;
+        nftTokenId = _tokenId;
+        emit NFTLinked(_nftContract, _tokenId);
+    }
+    
+    /**
+     * @dev Check if market is resolved
+     */
+    function isResolved() external view returns (bool) {
+        return marketState == MarketState.RESOLVED;
+    }
+    
+    /**
+     * @dev Get market outcome (only if resolved)
+     */
+    function outcome() external view returns (Outcome) {
+        require(marketState == MarketState.RESOLVED, "Market not resolved");
+        return winningOutcome;
     }
 }
 
