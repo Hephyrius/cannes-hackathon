@@ -124,7 +124,7 @@ contract MarketResolutionCorrectedTest is Test {
         (
             uint256 weight,
             bool active,
-            , , ,
+            , , 
         ) = resolution.getOracle(oracle1);
         
         assertEq(weight, 200);
