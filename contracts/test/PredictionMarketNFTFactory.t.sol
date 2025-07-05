@@ -4,6 +4,7 @@ pragma solidity ^0.8.25;
 import "forge-std/Test.sol";
 import "../src/PredictionMarketNFTFactory.sol";
 import "../src/PredictionMarket.sol";
+import "../src/StagedPredictionMarket.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockUSDC is ERC20 {
@@ -22,444 +23,499 @@ contract MockUSDC is ERC20 {
 
 contract PredictionMarketNFTFactoryTest is Test {
     PredictionMarketNFTFactory public factory;
-    PredictionMarket public market;
+    StagedPredictionMarket public stagedMarket;
     MockUSDC public usdc;
     
     address public owner = address(0x1);
     address public alice = address(0x2);
     address public bob = address(0x3);
+    address public charlie = address(0x4);
     
     function setUp() public {
         usdc = new MockUSDC();
-        
-        market = new PredictionMarket(
-            address(usdc),
-            "Will Bitcoin reach $100k by 2024?",
-            block.timestamp + 30 days
+        stagedMarket = new StagedPredictionMarket(
+            address(0), // factory
+            address(0), // voting
+            address(usdc)
         );
         
-        factory = new PredictionMarketNFTFactory();
+        factory = new PredictionMarketNFTFactory(
+            address(usdc),
+            "Prediction Market NFT",
+            "PMNFT",
+            "https://example.com/images/"
+        );
         factory.transferOwnership(owner);
         
         usdc.mint(alice, 50000e6);
         usdc.mint(bob, 30000e6);
+        usdc.mint(charlie, 20000e6);
         usdc.mint(owner, 100000e6);
     }
     
     function testConstructor() public view {
         assertEq(factory.owner(), owner);
+        assertEq(address(factory.usdc()), address(usdc));
+        assertEq(factory.marketCreationFee(), 1e6);
+        assertEq(factory.nftContract().name(), "Prediction Market NFT");
+        assertEq(factory.nftContract().symbol(), "PMNFT");
     }
     
-    function testCreateNFT() public {
+    function testSetStagedMarketManager() public {
         vm.prank(owner);
-        address nftAddress = factory.createNFT(
-            address(market),
-            "Bitcoin Market NFT",
-            "BTCMNFT"
-        );
+        factory.setStagedMarketManager(address(stagedMarket));
         
-        assertTrue(nftAddress != address(0));
-        
-        PredictionMarketNFT nft = PredictionMarketNFT(nftAddress);
-        assertEq(nft.name(), "Bitcoin Market NFT");
-        assertEq(nft.symbol(), "BTCMNFT");
-        assertEq(address(nft.market()), address(market));
+        assertEq(address(factory.stagedMarketManager()), address(stagedMarket));
     }
     
-    function testCreateNFTOnlyOwner() public {
+    function testSetStagedMarketManagerOnlyOwner() public {
         vm.prank(alice);
         vm.expectRevert("Ownable: caller is not the owner");
-        factory.createNFT(
-            address(market),
-            "Bitcoin Market NFT",
-            "BTCMNFT"
-        );
+        factory.setStagedMarketManager(address(stagedMarket));
     }
     
-    function testCreateMultipleNFTs() public {
-        PredictionMarket market2 = new PredictionMarket(
-            address(usdc),
-            "Will Ethereum reach $10k by 2024?",
-            block.timestamp + 30 days
-        );
+    function testSetMarketCreationFee() public {
+        vm.prank(owner);
+        factory.setMarketCreationFee(2e6);
         
-        vm.startPrank(owner);
+        assertEq(factory.marketCreationFee(), 2e6);
+    }
+    
+    function testSetMarketCreationFeeOnlyOwner() public {
+        vm.prank(alice);
+        vm.expectRevert("Ownable: caller is not the owner");
+        factory.setMarketCreationFee(2e6);
+    }
+    
+    function testCreateMarketWithNFT() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 1e6);
         
-        address nft1 = factory.createNFT(
-            address(market),
-            "Bitcoin Market NFT",
-            "BTCMNFT"
-        );
+        PredictionMarketNFTFactory.MarketCreationParams memory params = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Bitcoin reach $100k by 2024?",
+            description: "Bitcoin price prediction",
+            imageUrl: "https://example.com/btc.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
         
-        address nft2 = factory.createNFT(
-            address(market2),
-            "Ethereum Market NFT",
-            "ETHMNFT"
-        );
-        
+        (address marketAddress, uint256 nftTokenId) = factory.createMarketWithNFT(params);
         vm.stopPrank();
         
-        assertTrue(nft1 != address(0));
-        assertTrue(nft2 != address(0));
-        assertTrue(nft1 != nft2);
+        assertTrue(marketAddress != address(0));
+        assertEq(nftTokenId, 1);
         
-        PredictionMarketNFT nft1Contract = PredictionMarketNFT(nft1);
-        PredictionMarketNFT nft2Contract = PredictionMarketNFT(nft2);
+        PredictionMarket market = PredictionMarket(marketAddress);
+        assertEq(market.question(), "Will Bitcoin reach $100k by 2024?");
+        assertEq(market.resolutionTime(), block.timestamp + 30 days);
+        assertEq(market.owner(), alice);
         
-        assertEq(nft1Contract.name(), "Bitcoin Market NFT");
-        assertEq(nft2Contract.name(), "Ethereum Market NFT");
-        assertEq(address(nft1Contract.market()), address(market));
-        assertEq(address(nft2Contract.market()), address(market2));
+        PredictionMarketNFT nft = factory.nftContract();
+        assertEq(nft.ownerOf(nftTokenId), alice);
+        assertEq(nft.marketToTokenId(marketAddress), nftTokenId);
     }
     
-    function testGetNFTCount() public {
-        assertEq(factory.getNFTCount(), 0);
+    function testCreateMarketWithNFTInvalidResolutionTime() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 1e6);
         
-        vm.startPrank(owner);
+        PredictionMarketNFTFactory.MarketCreationParams memory params = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Bitcoin reach $100k by 2024?",
+            description: "Bitcoin price prediction",
+            imageUrl: "https://example.com/btc.jpg",
+            resolutionTime: block.timestamp - 1, // Past time
+            category: "Crypto",
+            tags: new string[](0)
+        });
         
-        factory.createNFT(
-            address(market),
-            "NFT 1",
-            "NFT1"
-        );
-        assertEq(factory.getNFTCount(), 1);
-        
-        factory.createNFT(
-            address(market),
-            "NFT 2",
-            "NFT2"
-        );
-        assertEq(factory.getNFTCount(), 2);
-        
+        vm.expectRevert("Resolution time must be in future");
+        factory.createMarketWithNFT(params);
         vm.stopPrank();
     }
     
-    function testGetNFTByIndex() public {
-        vm.startPrank(owner);
+    function testCreateMarketWithNFTEmptyQuestion() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 1e6);
         
-        address nft1 = factory.createNFT(
-            address(market),
-            "NFT 1",
-            "NFT1"
-        );
+        PredictionMarketNFTFactory.MarketCreationParams memory params = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "",
+            description: "Bitcoin price prediction",
+            imageUrl: "https://example.com/btc.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
         
-        address nft2 = factory.createNFT(
-            address(market),
-            "NFT 2",
-            "NFT2"
-        );
-        
-        address nft3 = factory.createNFT(
-            address(market),
-            "NFT 3",
-            "NFT3"
-        );
-        
+        vm.expectRevert("Question cannot be empty");
+        factory.createMarketWithNFT(params);
         vm.stopPrank();
-        
-        assertEq(factory.getNFTByIndex(0), nft1);
-        assertEq(factory.getNFTByIndex(1), nft2);
-        assertEq(factory.getNFTByIndex(2), nft3);
     }
     
-    function testGetNFTByIndexOutOfBounds() public {
+    function testBatchCreateMarkets() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 3e6);
+        
+        PredictionMarketNFTFactory.MarketCreationParams[] memory params = new PredictionMarketNFTFactory.MarketCreationParams[](2);
+        params[0] = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Bitcoin reach $100k by 2024?",
+            description: "Bitcoin price prediction",
+            imageUrl: "https://example.com/btc.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
+        params[1] = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Ethereum reach $10k by 2024?",
+            description: "Ethereum price prediction",
+            imageUrl: "https://example.com/eth.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
+        
+        (address[] memory marketAddresses, uint256[] memory nftTokenIds) = factory.batchCreateMarkets(params);
+        vm.stopPrank();
+        
+        assertEq(marketAddresses.length, 2);
+        assertEq(nftTokenIds.length, 2);
+        
+        assertTrue(marketAddresses[0] != address(0));
+        assertTrue(marketAddresses[1] != address(0));
+        assertEq(nftTokenIds[0], 1);
+        assertEq(nftTokenIds[1], 2);
+    }
+    
+    function testBatchCreateMarketsInvalidSize() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 12e6);
+        
+        PredictionMarketNFTFactory.MarketCreationParams[] memory params = new PredictionMarketNFTFactory.MarketCreationParams[](11);
+        for (uint256 i = 0; i < 11; i++) {
+            params[i] = PredictionMarketNFTFactory.MarketCreationParams({
+                question: string(abi.encodePacked("Question ", i.toString())),
+                description: "Description",
+                imageUrl: "",
+                resolutionTime: block.timestamp + 30 days,
+                category: "Crypto",
+                tags: new string[](0)
+            });
+        }
+        
+        vm.expectRevert("Invalid batch size");
+        factory.batchCreateMarkets(params);
+        vm.stopPrank();
+    }
+    
+    function testBatchCreateMarketsEmptyArray() public {
+        vm.startPrank(alice);
+        
+        PredictionMarketNFTFactory.MarketCreationParams[] memory params = new PredictionMarketNFTFactory.MarketCreationParams[](0);
+        
+        vm.expectRevert("Invalid batch size");
+        factory.batchCreateMarkets(params);
+        vm.stopPrank();
+    }
+    
+    function testUpdateMarketResolution() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 1e6);
+        
+        PredictionMarketNFTFactory.MarketCreationParams memory params = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Bitcoin reach $100k by 2024?",
+            description: "Bitcoin price prediction",
+            imageUrl: "https://example.com/btc.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
+        
+        (address marketAddress, uint256 nftTokenId) = factory.createMarketWithNFT(params);
+        vm.stopPrank();
+        
+        vm.warp(block.timestamp + 30 days + 1);
+        
+        vm.prank(alice);
+        PredictionMarket(marketAddress).resolveMarket(PredictionMarket.Outcome.YES);
+        
+        vm.prank(owner);
+        factory.updateMarketResolution(marketAddress);
+        
+        PredictionMarketNFT nft = factory.nftContract();
+        string memory resolution = nft.getMarketResolution(nftTokenId);
+        assertEq(resolution, "YES");
+    }
+    
+    function testUpdateMarketResolutionNotResolved() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 1e6);
+        
+        PredictionMarketNFTFactory.MarketCreationParams memory params = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Bitcoin reach $100k by 2024?",
+            description: "Bitcoin price prediction",
+            imageUrl: "https://example.com/btc.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
+        
+        (address marketAddress, ) = factory.createMarketWithNFT(params);
+        vm.stopPrank();
+        
+        vm.prank(owner);
+        vm.expectRevert("Market not resolved");
+        factory.updateMarketResolution(marketAddress);
+    }
+    
+    function testGetMarketsByCreator() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 2e6);
+        
+        PredictionMarketNFTFactory.MarketCreationParams memory params1 = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Bitcoin reach $100k by 2024?",
+            description: "Bitcoin price prediction",
+            imageUrl: "https://example.com/btc.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
+        
+        PredictionMarketNFTFactory.MarketCreationParams memory params2 = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Ethereum reach $10k by 2024?",
+            description: "Ethereum price prediction",
+            imageUrl: "https://example.com/eth.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
+        
+        (address market1, ) = factory.createMarketWithNFT(params1);
+        (address market2, ) = factory.createMarketWithNFT(params2);
+        vm.stopPrank();
+        
+        address[] memory aliceMarkets = factory.getMarketsByCreator(alice);
+        assertEq(aliceMarkets.length, 2);
+        assertEq(aliceMarkets[0], market1);
+        assertEq(aliceMarkets[1], market2);
+    }
+    
+    function testGetTotalMarkets() public {
+        assertEq(factory.getTotalMarkets(), 0);
+        
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 2e6);
+        
+        PredictionMarketNFTFactory.MarketCreationParams memory params = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Bitcoin reach $100k by 2024?",
+            description: "Bitcoin price prediction",
+            imageUrl: "https://example.com/btc.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
+        
+        factory.createMarketWithNFT(params);
+        assertEq(factory.getTotalMarkets(), 1);
+        
+        factory.createMarketWithNFT(params);
+        assertEq(factory.getTotalMarkets(), 2);
+        vm.stopPrank();
+    }
+    
+    function testGetMarketAtIndex() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 2e6);
+        
+        PredictionMarketNFTFactory.MarketCreationParams memory params = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Bitcoin reach $100k by 2024?",
+            description: "Bitcoin price prediction",
+            imageUrl: "https://example.com/btc.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
+        
+        (address market1, ) = factory.createMarketWithNFT(params);
+        (address market2, ) = factory.createMarketWithNFT(params);
+        vm.stopPrank();
+        
+        assertEq(factory.getMarketAtIndex(0), market1);
+        assertEq(factory.getMarketAtIndex(1), market2);
+    }
+    
+    function testGetMarketAtIndexOutOfBounds() public {
         vm.expectRevert("Index out of bounds");
-        factory.getNFTByIndex(0);
+        factory.getMarketAtIndex(0);
     }
     
-    function testGetNFTsByMarket() public {
-        PredictionMarket market2 = new PredictionMarket(
-            address(usdc),
-            "Will Ethereum reach $10k by 2024?",
-            block.timestamp + 30 days
-        );
+    function testGetMarketInfo() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 1e6);
         
-        vm.startPrank(owner);
+        PredictionMarketNFTFactory.MarketCreationParams memory params = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Bitcoin reach $100k by 2024?",
+            description: "Bitcoin price prediction",
+            imageUrl: "https://example.com/btc.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
         
-        address nft1 = factory.createNFT(
-            address(market),
-            "BTC NFT 1",
-            "BTC1"
-        );
-        
-        address nft2 = factory.createNFT(
-            address(market),
-            "BTC NFT 2",
-            "BTC2"
-        );
-        
-        address nft3 = factory.createNFT(
-            address(market2),
-            "ETH NFT 1",
-            "ETH1"
-        );
-        
+        (address marketAddress, uint256 nftTokenId) = factory.createMarketWithNFT(params);
         vm.stopPrank();
         
-        address[] memory btcNFTs = factory.getNFTsByMarket(address(market));
-        address[] memory ethNFTs = factory.getNFTsByMarket(address(market2));
+        (
+            string memory question,
+            uint256 resolutionTime,
+            bool isResolved,
+            PredictionMarket.Outcome outcome,
+            uint256 returnedNftTokenId,
+            address nftOwner
+        ) = factory.getMarketInfo(marketAddress);
         
-        assertEq(btcNFTs.length, 2);
-        assertEq(ethNFTs.length, 1);
-        
-        assertEq(btcNFTs[0], nft1);
-        assertEq(btcNFTs[1], nft2);
-        assertEq(ethNFTs[0], nft3);
+        assertEq(question, "Will Bitcoin reach $100k by 2024?");
+        assertEq(resolutionTime, block.timestamp + 30 days);
+        assertFalse(isResolved);
+        assertEq(uint256(outcome), 0);
+        assertEq(returnedNftTokenId, nftTokenId);
+        assertEq(nftOwner, alice);
     }
     
-    function testGetNFTsByMarketEmpty() public {
-        address[] memory nfts = factory.getNFTsByMarket(address(market));
-        assertEq(nfts.length, 0);
+    function testFuzzCreateMarketWithNFT(string memory question, string memory description, string memory category) public {
+        vm.assume(bytes(question).length > 0 && bytes(question).length <= 200);
+        vm.assume(bytes(description).length <= 500);
+        vm.assume(bytes(category).length <= 50);
+        
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 1e6);
+        
+        PredictionMarketNFTFactory.MarketCreationParams memory params = PredictionMarketNFTFactory.MarketCreationParams({
+            question: question,
+            description: description,
+            imageUrl: "",
+            resolutionTime: block.timestamp + 30 days,
+            category: category,
+            tags: new string[](0)
+        });
+        
+        (address marketAddress, uint256 nftTokenId) = factory.createMarketWithNFT(params);
+        vm.stopPrank();
+        
+        assertTrue(marketAddress != address(0));
+        assertEq(nftTokenId, 1);
+        
+        PredictionMarket market = PredictionMarket(marketAddress);
+        assertEq(market.question(), question);
+    }
+    
+    function testInvariantMarketCount() public {
+        uint256 initialCount = factory.getTotalMarkets();
+        
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 1e6);
+        
+        PredictionMarketNFTFactory.MarketCreationParams memory params = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Bitcoin reach $100k by 2024?",
+            description: "Bitcoin price prediction",
+            imageUrl: "https://example.com/btc.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
+        
+        factory.createMarketWithNFT(params);
+        vm.stopPrank();
+        
+        assertEq(factory.getTotalMarkets(), initialCount + 1);
     }
     
     function testEventEmission() public {
         vm.expectEmit(true, true, false, true);
-        emit PredictionMarketNFTFactory.NFTCreated(
+        emit PredictionMarketNFTFactory.MarketCreatedWithNFT(
+            alice,
             address(0), // Will be set by the factory
-            address(market),
-            "Test NFT",
-            "TEST"
+            1,
+            "Will Bitcoin reach $100k by 2024?"
         );
         
-        vm.prank(owner);
-        factory.createNFT(
-            address(market),
-            "Test NFT",
-            "TEST"
-        );
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 1e6);
+        
+        PredictionMarketNFTFactory.MarketCreationParams memory params = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Bitcoin reach $100k by 2024?",
+            description: "Bitcoin price prediction",
+            imageUrl: "https://example.com/btc.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
+        
+        factory.createMarketWithNFT(params);
+        vm.stopPrank();
     }
     
-    function testFuzzCreateNFT(string memory name, string memory symbol) public {
-        vm.assume(bytes(name).length > 0 && bytes(name).length <= 50);
-        vm.assume(bytes(symbol).length > 0 && bytes(symbol).length <= 10);
+    function testMultipleUsersCreatingMarkets() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 1e6);
         
-        vm.prank(owner);
-        address nftAddress = factory.createNFT(
-            address(market),
-            name,
-            symbol
-        );
+        PredictionMarketNFTFactory.MarketCreationParams memory aliceParams = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Bitcoin reach $100k by 2024?",
+            description: "Bitcoin price prediction",
+            imageUrl: "https://example.com/btc.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
         
-        assertTrue(nftAddress != address(0));
-        
-        PredictionMarketNFT nft = PredictionMarketNFT(nftAddress);
-        assertEq(nft.name(), name);
-        assertEq(nft.symbol(), symbol);
-    }
-    
-    function testInvariantNFTCount() public {
-        uint256 initialCount = factory.getNFTCount();
-        
-        vm.prank(owner);
-        factory.createNFT(
-            address(market),
-            "Test NFT",
-            "TEST"
-        );
-        
-        assertEq(factory.getNFTCount(), initialCount + 1);
-    }
-    
-    function testCreateNFTWithZeroAddress() public {
-        vm.prank(owner);
-        vm.expectRevert("Market address cannot be zero");
-        factory.createNFT(
-            address(0),
-            "Test NFT",
-            "TEST"
-        );
-    }
-    
-    function testCreateNFTWithEmptyName() public {
-        vm.prank(owner);
-        vm.expectRevert("Name cannot be empty");
-        factory.createNFT(
-            address(market),
-            "",
-            "TEST"
-        );
-    }
-    
-    function testCreateNFTWithEmptySymbol() public {
-        vm.prank(owner);
-        vm.expectRevert("Symbol cannot be empty");
-        factory.createNFT(
-            address(market),
-            "Test NFT",
-            ""
-        );
-    }
-    
-    function testBatchCreateNFTs() public {
-        PredictionMarket market2 = new PredictionMarket(
-            address(usdc),
-            "Will Ethereum reach $10k by 2024?",
-            block.timestamp + 30 days
-        );
-        
-        PredictionMarket market3 = new PredictionMarket(
-            address(usdc),
-            "Will Solana reach $500 by 2024?",
-            block.timestamp + 30 days
-        );
-        
-        vm.startPrank(owner);
-        
-        address[] memory markets = new address[](3);
-        string[] memory names = new string[](3);
-        string[] memory symbols = new string[](3);
-        
-        markets[0] = address(market);
-        markets[1] = address(market2);
-        markets[2] = address(market3);
-        
-        names[0] = "Bitcoin NFT";
-        names[1] = "Ethereum NFT";
-        names[2] = "Solana NFT";
-        
-        symbols[0] = "BTCMNFT";
-        symbols[1] = "ETHMNFT";
-        symbols[2] = "SOLMNFT";
-        
-        address[] memory nftAddresses = factory.batchCreateNFTs(markets, names, symbols);
-        
+        (address aliceMarket, ) = factory.createMarketWithNFT(aliceParams);
         vm.stopPrank();
         
-        assertEq(nftAddresses.length, 3);
-        assertTrue(nftAddresses[0] != address(0));
-        assertTrue(nftAddresses[1] != address(0));
-        assertTrue(nftAddresses[2] != address(0));
+        vm.startPrank(bob);
+        usdc.approve(address(factory), 1e6);
         
-        PredictionMarketNFT nft1 = PredictionMarketNFT(nftAddresses[0]);
-        PredictionMarketNFT nft2 = PredictionMarketNFT(nftAddresses[1]);
-        PredictionMarketNFT nft3 = PredictionMarketNFT(nftAddresses[2]);
+        PredictionMarketNFTFactory.MarketCreationParams memory bobParams = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Ethereum reach $10k by 2024?",
+            description: "Ethereum price prediction",
+            imageUrl: "https://example.com/eth.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
         
-        assertEq(nft1.name(), "Bitcoin NFT");
-        assertEq(nft2.name(), "Ethereum NFT");
-        assertEq(nft3.name(), "Solana NFT");
-        
-        assertEq(address(nft1.market()), address(market));
-        assertEq(address(nft2.market()), address(market2));
-        assertEq(address(nft3.market()), address(market3));
-    }
-    
-    function testBatchCreateNFTsOnlyOwner() public {
-        address[] memory markets = new address[](1);
-        string[] memory names = new string[](1);
-        string[] memory symbols = new string[](1);
-        
-        markets[0] = address(market);
-        names[0] = "Test NFT";
-        symbols[0] = "TEST";
-        
-        vm.prank(alice);
-        vm.expectRevert("Ownable: caller is not the owner");
-        factory.batchCreateNFTs(markets, names, symbols);
-    }
-    
-    function testBatchCreateNFTsInvalidArrays() public {
-        address[] memory markets = new address[](2);
-        string[] memory names = new string[](1);
-        string[] memory symbols = new string[](2);
-        
-        markets[0] = address(market);
-        markets[1] = address(market);
-        symbols[0] = "TEST1";
-        symbols[1] = "TEST2";
-        
-        vm.prank(owner);
-        vm.expectRevert("Arrays must have the same length");
-        factory.batchCreateNFTs(markets, names, symbols);
-    }
-    
-    function testBatchCreateNFTsEmptyArray() public {
-        address[] memory markets = new address[](0);
-        string[] memory names = new string[](0);
-        string[] memory symbols = new string[](0);
-        
-        vm.prank(owner);
-        vm.expectRevert("Arrays cannot be empty");
-        factory.batchCreateNFTs(markets, names, symbols);
-    }
-    
-    function testGetAllNFTs() public {
-        vm.startPrank(owner);
-        
-        address nft1 = factory.createNFT(
-            address(market),
-            "NFT 1",
-            "NFT1"
-        );
-        
-        address nft2 = factory.createNFT(
-            address(market),
-            "NFT 2",
-            "NFT2"
-        );
-        
-        address nft3 = factory.createNFT(
-            address(market),
-            "NFT 3",
-            "NFT3"
-        );
-        
+        (address bobMarket, ) = factory.createMarketWithNFT(bobParams);
         vm.stopPrank();
         
-        address[] memory allNFTs = factory.getAllNFTs();
+        vm.startPrank(charlie);
+        usdc.approve(address(factory), 1e6);
         
-        assertEq(allNFTs.length, 3);
-        assertEq(allNFTs[0], nft1);
-        assertEq(allNFTs[1], nft2);
-        assertEq(allNFTs[2], nft3);
-    }
-    
-    function testGetAllNFTsEmpty() public {
-        address[] memory allNFTs = factory.getAllNFTs();
-        assertEq(allNFTs.length, 0);
-    }
-    
-    function testNFTExists() public {
-        vm.prank(owner);
-        address nftAddress = factory.createNFT(
-            address(market),
-            "Test NFT",
-            "TEST"
-        );
+        PredictionMarketNFTFactory.MarketCreationParams memory charlieParams = PredictionMarketNFTFactory.MarketCreationParams({
+            question: "Will Solana reach $500 by 2024?",
+            description: "Solana price prediction",
+            imageUrl: "https://example.com/sol.jpg",
+            resolutionTime: block.timestamp + 30 days,
+            category: "Crypto",
+            tags: new string[](0)
+        });
         
-        assertTrue(factory.nftExists(nftAddress));
-        assertFalse(factory.nftExists(address(0x999)));
-    }
-    
-    function testGetNFTsByMarketRange() public {
-        vm.startPrank(owner);
-        
-        for (uint256 i = 0; i < 10; i++) {
-            factory.createNFT(
-                address(market),
-                string(abi.encodePacked("NFT ", vm.toString(i))),
-                string(abi.encodePacked("NFT", vm.toString(i)))
-            );
-        }
-        
+        (address charlieMarket, ) = factory.createMarketWithNFT(charlieParams);
         vm.stopPrank();
         
-        address[] memory nfts = factory.getNFTsByMarketRange(address(market), 0, 5);
-        assertEq(nfts.length, 5);
+        assertTrue(aliceMarket != address(0));
+        assertTrue(bobMarket != address(0));
+        assertTrue(charlieMarket != address(0));
         
-        nfts = factory.getNFTsByMarketRange(address(market), 5, 10);
-        assertEq(nfts.length, 5);
+        address[] memory aliceMarkets = factory.getMarketsByCreator(alice);
+        address[] memory bobMarkets = factory.getMarketsByCreator(bob);
+        address[] memory charlieMarkets = factory.getMarketsByCreator(charlie);
         
-        nfts = factory.getNFTsByMarketRange(address(market), 0, 10);
-        assertEq(nfts.length, 10);
-    }
-    
-    function testGetNFTsByMarketRangeInvalid() public {
-        vm.expectRevert("Invalid range");
-        factory.getNFTsByMarketRange(address(market), 5, 3);
-    }
-    
-    function testGetNFTsByMarketRangeOutOfBounds() public {
-        vm.expectRevert("Range out of bounds");
-        factory.getNFTsByMarketRange(address(market), 0, 5);
+        assertEq(aliceMarkets.length, 1);
+        assertEq(bobMarkets.length, 1);
+        assertEq(charlieMarkets.length, 1);
+        
+        assertEq(aliceMarkets[0], aliceMarket);
+        assertEq(bobMarkets[0], bobMarket);
+        assertEq(charlieMarkets[0], charlieMarket);
+        
+        assertEq(factory.getTotalMarkets(), 3);
     }
 } 

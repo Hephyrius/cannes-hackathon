@@ -4,6 +4,7 @@ pragma solidity ^0.8.25;
 import "forge-std/Test.sol";
 import "../src/OutcomeFundingFactory.sol";
 import "../src/PredictionMarket.sol";
+import "../src/MarketResolution.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockUSDC is ERC20 {
@@ -23,14 +24,20 @@ contract MockUSDC is ERC20 {
 contract OutcomeFundingFactoryTest is Test {
     OutcomeFundingFactory public factory;
     PredictionMarket public market;
+    MarketResolution public resolution;
     MockUSDC public usdc;
     
     address public owner = address(0x1);
     address public alice = address(0x2);
     address public bob = address(0x3);
+    address public charlie = address(0x4);
     
     function setUp() public {
         usdc = new MockUSDC();
+        resolution = new MarketResolution(address(usdc), address(0));
+        
+        factory = new OutcomeFundingFactory(address(usdc));
+        factory.transferOwnership(owner);
         
         market = new PredictionMarket(
             address(usdc),
@@ -38,27 +45,45 @@ contract OutcomeFundingFactoryTest is Test {
             block.timestamp + 30 days
         );
         
-        factory = new OutcomeFundingFactory();
-        factory.transferOwnership(owner);
-        
         usdc.mint(alice, 50000e6);
         usdc.mint(bob, 30000e6);
+        usdc.mint(charlie, 20000e6);
         usdc.mint(owner, 100000e6);
     }
     
     function testConstructor() public view {
+        assertEq(address(factory.usdc()), address(usdc));
         assertEq(factory.owner(), owner);
+        assertEq(factory.creationFee(), 50e6);
+        assertEq(factory.platformFeeRate(), 250);
     }
     
-    function testCreateOutcomeFunding() public {
+    function testSetResolutionContract() public {
         vm.prank(owner);
-        address fundingAddress = factory.createOutcomeFunding(
-            address(usdc),
+        factory.setResolutionContract(address(resolution));
+        
+        assertEq(address(factory.resolutionContract()), address(resolution));
+    }
+    
+    function testSetResolutionContractOnlyOwner() public {
+        vm.prank(alice);
+        vm.expectRevert("Ownable: caller is not the owner");
+        factory.setResolutionContract(address(resolution));
+    }
+    
+    function testCreateFundingContract() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 50e6);
+        
+        address fundingAddress = factory.createFundingContract(
             address(market),
             PredictionMarket.Outcome.YES,
             "Bitcoin $100k YES Fund",
+            "Description",
+            "Bitcoin $100k YES Fund",
             "BTC100Y"
         );
+        vm.stopPrank();
         
         assertTrue(fundingAddress != address(0));
         
@@ -70,411 +95,458 @@ contract OutcomeFundingFactoryTest is Test {
         assertEq(uint256(funding.targetOutcome()), uint256(PredictionMarket.Outcome.YES));
     }
     
-    function testCreateOutcomeFundingOnlyOwner() public {
+    function testCreateFundingContractInvalidMarket() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 50e6);
+        
+        vm.expectRevert("Invalid market address");
+        factory.createFundingContract(
+            address(0),
+            PredictionMarket.Outcome.YES,
+            "Bitcoin $100k YES Fund",
+            "Description",
+            "Bitcoin $100k YES Fund",
+            "BTC100Y"
+        );
+        vm.stopPrank();
+    }
+    
+    function testCreateFundingContractEmptyTitle() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 50e6);
+        
+        vm.expectRevert("Title required");
+        factory.createFundingContract(
+            address(market),
+            PredictionMarket.Outcome.YES,
+            "",
+            "Description",
+            "Bitcoin $100k YES Fund",
+            "BTC100Y"
+        );
+        vm.stopPrank();
+    }
+    
+    function testCreateFundingContractEmptyTokenName() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 50e6);
+        
+        vm.expectRevert("Token name required");
+        factory.createFundingContract(
+            address(market),
+            PredictionMarket.Outcome.YES,
+            "Bitcoin $100k YES Fund",
+            "Description",
+            "",
+            "BTC100Y"
+        );
+        vm.stopPrank();
+    }
+    
+    function testCreateFundingContractEmptyTokenSymbol() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 50e6);
+        
+        vm.expectRevert("Token symbol required");
+        factory.createFundingContract(
+            address(market),
+            PredictionMarket.Outcome.YES,
+            "Bitcoin $100k YES Fund",
+            "Description",
+            "Bitcoin $100k YES Fund",
+            ""
+        );
+        vm.stopPrank();
+    }
+    
+    function testCreateMultipleFundingContracts() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 100e6);
+        
+        PredictionMarket.Outcome[] memory outcomes = new PredictionMarket.Outcome[](2);
+        string[] memory titles = new string[](2);
+        string[] memory descriptions = new string[](2);
+        string[] memory tokenNames = new string[](2);
+        string[] memory tokenSymbols = new string[](2);
+        
+        outcomes[0] = PredictionMarket.Outcome.YES;
+        outcomes[1] = PredictionMarket.Outcome.NO;
+        titles[0] = "Bitcoin $100k YES Fund";
+        titles[1] = "Bitcoin $100k NO Fund";
+        descriptions[0] = "Description 1";
+        descriptions[1] = "Description 2";
+        tokenNames[0] = "Bitcoin $100k YES Fund";
+        tokenNames[1] = "Bitcoin $100k NO Fund";
+        tokenSymbols[0] = "BTC100Y";
+        tokenSymbols[1] = "BTC100N";
+        
+        address[] memory fundingAddresses = factory.createMultipleFundingContracts(
+            address(market),
+            outcomes,
+            titles,
+            descriptions,
+            tokenNames,
+            tokenSymbols
+        );
+        vm.stopPrank();
+        
+        assertEq(fundingAddresses.length, 2);
+        assertTrue(fundingAddresses[0] != address(0));
+        assertTrue(fundingAddresses[1] != address(0));
+        assertTrue(fundingAddresses[0] != fundingAddresses[1]);
+    }
+    
+    function testCreateMultipleFundingContractsArrayMismatch() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 100e6);
+        
+        PredictionMarket.Outcome[] memory outcomes = new PredictionMarket.Outcome[](2);
+        string[] memory titles = new string[](1);
+        string[] memory descriptions = new string[](2);
+        string[] memory tokenNames = new string[](2);
+        string[] memory tokenSymbols = new string[](2);
+        
+        outcomes[0] = PredictionMarket.Outcome.YES;
+        outcomes[1] = PredictionMarket.Outcome.NO;
+        titles[0] = "Bitcoin $100k YES Fund";
+        descriptions[0] = "Description 1";
+        descriptions[1] = "Description 2";
+        tokenNames[0] = "Bitcoin $100k YES Fund";
+        tokenNames[1] = "Bitcoin $100k NO Fund";
+        tokenSymbols[0] = "BTC100Y";
+        tokenSymbols[1] = "BTC100N";
+        
+        vm.expectRevert("Array length mismatch");
+        factory.createMultipleFundingContracts(
+            address(market),
+            outcomes,
+            titles,
+            descriptions,
+            tokenNames,
+            tokenSymbols
+        );
+        vm.stopPrank();
+    }
+    
+    function testUpdateFundingContractStatus() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 50e6);
+        
+        address fundingAddress = factory.createFundingContract(
+            address(market),
+            PredictionMarket.Outcome.YES,
+            "Bitcoin $100k YES Fund",
+            "Description",
+            "Bitcoin $100k YES Fund",
+            "BTC100Y"
+        );
+        vm.stopPrank();
+        
+        vm.prank(owner);
+        factory.updateFundingContractStatus(fundingAddress, false);
+        
+        (
+            , , , , bool active, ,
+        ) = factory.getFundingContractInfo(fundingAddress);
+        
+        assertFalse(active);
+    }
+    
+    function testUpdateFundingContractStatusOnlyOwner() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 50e6);
+        
+        address fundingAddress = factory.createFundingContract(
+            address(market),
+            PredictionMarket.Outcome.YES,
+            "Bitcoin $100k YES Fund",
+            "Description",
+            "Bitcoin $100k YES Fund",
+            "BTC100Y"
+        );
+        vm.stopPrank();
+        
         vm.prank(alice);
         vm.expectRevert("Ownable: caller is not the owner");
-        factory.createOutcomeFunding(
-            address(usdc),
-            address(market),
-            PredictionMarket.Outcome.YES,
-            "Bitcoin $100k YES Fund",
-            "BTC100Y"
-        );
+        factory.updateFundingContractStatus(fundingAddress, false);
     }
     
-    function testCreateMultipleOutcomeFundings() public {
-        vm.startPrank(owner);
-        
-        address funding1 = factory.createOutcomeFunding(
-            address(usdc),
-            address(market),
-            PredictionMarket.Outcome.YES,
-            "Bitcoin $100k YES Fund",
-            "BTC100Y"
-        );
-        
-        address funding2 = factory.createOutcomeFunding(
-            address(usdc),
-            address(market),
-            PredictionMarket.Outcome.NO,
-            "Bitcoin $100k NO Fund",
-            "BTC100N"
-        );
-        
-        vm.stopPrank();
-        
-        assertTrue(funding1 != address(0));
-        assertTrue(funding2 != address(0));
-        assertTrue(funding1 != funding2);
-        
-        OutcomeFunding yesFunding = OutcomeFunding(funding1);
-        OutcomeFunding noFunding = OutcomeFunding(funding2);
-        
-        assertEq(yesFunding.name(), "Bitcoin $100k YES Fund");
-        assertEq(noFunding.name(), "Bitcoin $100k NO Fund");
-        assertEq(uint256(yesFunding.targetOutcome()), uint256(PredictionMarket.Outcome.YES));
-        assertEq(uint256(noFunding.targetOutcome()), uint256(PredictionMarket.Outcome.NO));
+    function testUpdateFundingContractStatusNotFound() public {
+        vm.prank(owner);
+        vm.expectRevert("Funding contract not found");
+        factory.updateFundingContractStatus(address(0x999), false);
     }
     
-    function testCreateOutcomeFundingWithDifferentMarkets() public {
-        PredictionMarket market2 = new PredictionMarket(
-            address(usdc),
-            "Will Ethereum reach $10k by 2024?",
-            block.timestamp + 30 days
-        );
+    function testGetFundingContractsForMarket() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 100e6);
         
-        vm.startPrank(owner);
-        
-        address funding1 = factory.createOutcomeFunding(
-            address(usdc),
-            address(market),
-            PredictionMarket.Outcome.YES,
-            "Bitcoin $100k YES Fund",
-            "BTC100Y"
-        );
-        
-        address funding2 = factory.createOutcomeFunding(
-            address(usdc),
-            address(market2),
-            PredictionMarket.Outcome.YES,
-            "Ethereum $10k YES Fund",
-            "ETH10Y"
-        );
-        
-        vm.stopPrank();
-        
-        OutcomeFunding btcFunding = OutcomeFunding(funding1);
-        OutcomeFunding ethFunding = OutcomeFunding(funding2);
-        
-        assertEq(address(btcFunding.market()), address(market));
-        assertEq(address(ethFunding.market()), address(market2));
-    }
-    
-    function testCreateOutcomeFundingWithDifferentTokens() public {
-        MockUSDC usdc2 = new MockUSDC();
-        
-        vm.startPrank(owner);
-        
-        address funding1 = factory.createOutcomeFunding(
-            address(usdc),
-            address(market),
-            PredictionMarket.Outcome.YES,
-            "USDC Fund",
-            "USDCY"
-        );
-        
-        address funding2 = factory.createOutcomeFunding(
-            address(usdc2),
-            address(market),
-            PredictionMarket.Outcome.YES,
-            "USDC2 Fund",
-            "USDC2Y"
-        );
-        
-        vm.stopPrank();
-        
-        OutcomeFunding funding1Contract = OutcomeFunding(funding1);
-        OutcomeFunding funding2Contract = OutcomeFunding(funding2);
-        
-        assertEq(address(funding1Contract.usdc()), address(usdc));
-        assertEq(address(funding2Contract.usdc()), address(usdc2));
-    }
-    
-    function testGetOutcomeFundingCount() public {
-        assertEq(factory.getOutcomeFundingCount(), 0);
-        
-        vm.startPrank(owner);
-        
-        factory.createOutcomeFunding(
-            address(usdc),
+        address funding1 = factory.createFundingContract(
             address(market),
             PredictionMarket.Outcome.YES,
             "Fund 1",
-            "FUND1"
-        );
-        assertEq(factory.getOutcomeFundingCount(), 1);
-        
-        factory.createOutcomeFunding(
-            address(usdc),
-            address(market),
-            PredictionMarket.Outcome.NO,
-            "Fund 2",
-            "FUND2"
-        );
-        assertEq(factory.getOutcomeFundingCount(), 2);
-        
-        factory.createOutcomeFunding(
-            address(usdc),
-            address(market),
-            PredictionMarket.Outcome.YES,
-            "Fund 3",
-            "FUND3"
-        );
-        assertEq(factory.getOutcomeFundingCount(), 3);
-        
-        vm.stopPrank();
-    }
-    
-    function testGetOutcomeFundingByIndex() public {
-        vm.startPrank(owner);
-        
-        address funding1 = factory.createOutcomeFunding(
-            address(usdc),
-            address(market),
-            PredictionMarket.Outcome.YES,
+            "Description 1",
             "Fund 1",
             "FUND1"
         );
         
-        address funding2 = factory.createOutcomeFunding(
-            address(usdc),
+        address funding2 = factory.createFundingContract(
             address(market),
             PredictionMarket.Outcome.NO,
             "Fund 2",
+            "Description 2",
+            "Fund 2",
             "FUND2"
         );
-        
-        address funding3 = factory.createOutcomeFunding(
-            address(usdc),
-            address(market),
-            PredictionMarket.Outcome.YES,
-            "Fund 3",
-            "FUND3"
-        );
-        
         vm.stopPrank();
         
-        assertEq(factory.getOutcomeFundingByIndex(0), funding1);
-        assertEq(factory.getOutcomeFundingByIndex(1), funding2);
-        assertEq(factory.getOutcomeFundingByIndex(2), funding3);
+        address[] memory marketFundings = factory.getFundingContractsForMarket(address(market));
+        
+        assertEq(marketFundings.length, 2);
+        assertEq(marketFundings[0], funding1);
+        assertEq(marketFundings[1], funding2);
     }
     
-    function testGetOutcomeFundingByIndexOutOfBounds() public {
-        vm.expectRevert("Index out of bounds");
-        factory.getOutcomeFundingByIndex(0);
-    }
-    
-    function testGetOutcomeFundingsByMarket() public {
-        PredictionMarket market2 = new PredictionMarket(
-            address(usdc),
-            "Will Ethereum reach $10k by 2024?",
-            block.timestamp + 30 days
-        );
+    function testGetFundingContractsByCreator() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 100e6);
         
-        vm.startPrank(owner);
-        
-        address funding1 = factory.createOutcomeFunding(
-            address(usdc),
+        address funding1 = factory.createFundingContract(
             address(market),
             PredictionMarket.Outcome.YES,
-            "BTC YES",
-            "BTCY"
+            "Fund 1",
+            "Description 1",
+            "Fund 1",
+            "FUND1"
         );
         
-        address funding2 = factory.createOutcomeFunding(
-            address(usdc),
+        address funding2 = factory.createFundingContract(
             address(market),
             PredictionMarket.Outcome.NO,
-            "BTC NO",
-            "BTCN"
+            "Fund 2",
+            "Description 2",
+            "Fund 2",
+            "FUND2"
         );
-        
-        address funding3 = factory.createOutcomeFunding(
-            address(usdc),
-            address(market2),
-            PredictionMarket.Outcome.YES,
-            "ETH YES",
-            "ETHY"
-        );
-        
         vm.stopPrank();
         
-        address[] memory btcFundings = factory.getOutcomeFundingsByMarket(address(market));
-        address[] memory ethFundings = factory.getOutcomeFundingsByMarket(address(market2));
+        address[] memory creatorFundings = factory.getFundingContractsByCreator(alice);
         
-        assertEq(btcFundings.length, 2);
-        assertEq(ethFundings.length, 1);
-        
-        assertEq(btcFundings[0], funding1);
-        assertEq(btcFundings[1], funding2);
-        assertEq(ethFundings[0], funding3);
+        assertEq(creatorFundings.length, 2);
+        assertEq(creatorFundings[0], funding1);
+        assertEq(creatorFundings[1], funding2);
     }
     
-    function testGetOutcomeFundingsByMarketEmpty() public {
-        address[] memory fundings = factory.getOutcomeFundingsByMarket(address(market));
-        assertEq(fundings.length, 0);
-    }
-    
-    function testGetOutcomeFundingsByOutcome() public {
-        vm.startPrank(owner);
+    function testGetAllFundingContracts() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 100e6);
         
-        address funding1 = factory.createOutcomeFunding(
-            address(usdc),
+        address funding1 = factory.createFundingContract(
             address(market),
             PredictionMarket.Outcome.YES,
-            "YES Fund 1",
-            "YES1"
+            "Fund 1",
+            "Description 1",
+            "Fund 1",
+            "FUND1"
         );
         
-        address funding2 = factory.createOutcomeFunding(
-            address(usdc),
+        address funding2 = factory.createFundingContract(
             address(market),
             PredictionMarket.Outcome.NO,
-            "NO Fund 1",
-            "NO1"
+            "Fund 2",
+            "Description 2",
+            "Fund 2",
+            "FUND2"
         );
-        
-        address funding3 = factory.createOutcomeFunding(
-            address(usdc),
-            address(market),
-            PredictionMarket.Outcome.YES,
-            "YES Fund 2",
-            "YES2"
-        );
-        
         vm.stopPrank();
         
-        address[] memory yesFundings = factory.getOutcomeFundingsByOutcome(PredictionMarket.Outcome.YES);
-        address[] memory noFundings = factory.getOutcomeFundingsByOutcome(PredictionMarket.Outcome.NO);
+        address[] memory allFundings = factory.getAllFundingContracts();
         
-        assertEq(yesFundings.length, 2);
-        assertEq(noFundings.length, 1);
-        
-        assertEq(yesFundings[0], funding1);
-        assertEq(yesFundings[1], funding3);
-        assertEq(noFundings[0], funding2);
+        assertEq(allFundings.length, 2);
+        assertEq(allFundings[0], funding1);
+        assertEq(allFundings[1], funding2);
     }
     
-    function testGetOutcomeFundingsByOutcomeEmpty() public {
-        address[] memory yesFundings = factory.getOutcomeFundingsByOutcome(PredictionMarket.Outcome.YES);
-        address[] memory noFundings = factory.getOutcomeFundingsByOutcome(PredictionMarket.Outcome.NO);
+    function testGetFundingContractInfo() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 50e6);
         
-        assertEq(yesFundings.length, 0);
-        assertEq(noFundings.length, 0);
-    }
-    
-    function testGetOutcomeFundingsByMarketAndOutcome() public {
-        PredictionMarket market2 = new PredictionMarket(
-            address(usdc),
-            "Will Ethereum reach $10k by 2024?",
-            block.timestamp + 30 days
-        );
-        
-        vm.startPrank(owner);
-        
-        address funding1 = factory.createOutcomeFunding(
-            address(usdc),
+        address fundingAddress = factory.createFundingContract(
             address(market),
             PredictionMarket.Outcome.YES,
-            "BTC YES",
-            "BTCY"
+            "Bitcoin $100k YES Fund",
+            "Description",
+            "Bitcoin $100k YES Fund",
+            "BTC100Y"
         );
-        
-        address funding2 = factory.createOutcomeFunding(
-            address(usdc),
-            address(market),
-            PredictionMarket.Outcome.NO,
-            "BTC NO",
-            "BTCN"
-        );
-        
-        address funding3 = factory.createOutcomeFunding(
-            address(usdc),
-            address(market2),
-            PredictionMarket.Outcome.YES,
-            "ETH YES",
-            "ETHY"
-        );
-        
         vm.stopPrank();
         
-        address[] memory btcYesFundings = factory.getOutcomeFundingsByMarketAndOutcome(
-            address(market),
-            PredictionMarket.Outcome.YES
-        );
+        (
+            address marketAddress,
+            PredictionMarket.Outcome targetOutcome,
+            uint256 createdAt,
+            address creator,
+            bool active,
+            string memory title,
+            string memory description
+        ) = factory.getFundingContractInfo(fundingAddress);
         
-        address[] memory btcNoFundings = factory.getOutcomeFundingsByMarketAndOutcome(
-            address(market),
-            PredictionMarket.Outcome.NO
-        );
-        
-        address[] memory ethYesFundings = factory.getOutcomeFundingsByMarketAndOutcome(
-            address(market2),
-            PredictionMarket.Outcome.YES
-        );
-        
-        assertEq(btcYesFundings.length, 1);
-        assertEq(btcNoFundings.length, 1);
-        assertEq(ethYesFundings.length, 1);
-        
-        assertEq(btcYesFundings[0], funding1);
-        assertEq(btcNoFundings[0], funding2);
-        assertEq(ethYesFundings[0], funding3);
+        assertEq(marketAddress, address(market));
+        assertEq(uint256(targetOutcome), uint256(PredictionMarket.Outcome.YES));
+        assertGt(createdAt, 0);
+        assertEq(creator, alice);
+        assertTrue(active);
+        assertEq(title, "Bitcoin $100k YES Fund");
+        assertEq(description, "Description");
     }
     
-    function testGetOutcomeFundingsByMarketAndOutcomeEmpty() public {
-        address[] memory fundings = factory.getOutcomeFundingsByMarketAndOutcome(
-            address(market),
-            PredictionMarket.Outcome.YES
-        );
-        assertEq(fundings.length, 0);
-    }
-    
-    function testEventEmission() public {
-        vm.expectEmit(true, true, false, true);
-        emit OutcomeFundingFactory.OutcomeFundingCreated(
-            address(0), // Will be set by the factory
-            address(usdc),
-            address(market),
-            PredictionMarket.Outcome.YES,
-            "Test Fund",
-            "TEST"
-        );
+    function testFuzzCreateFundingContract(string memory title, string memory description, string memory tokenName, string memory tokenSymbol) public {
+        vm.assume(bytes(title).length > 0 && bytes(title).length <= 100);
+        vm.assume(bytes(description).length <= 500);
+        vm.assume(bytes(tokenName).length > 0 && bytes(tokenName).length <= 50);
+        vm.assume(bytes(tokenSymbol).length > 0 && bytes(tokenSymbol).length <= 10);
         
-        vm.prank(owner);
-        factory.createOutcomeFunding(
-            address(usdc),
-            address(market),
-            PredictionMarket.Outcome.YES,
-            "Test Fund",
-            "TEST"
-        );
-    }
-    
-    function testFuzzCreateOutcomeFunding(string memory name, string memory symbol) public {
-        vm.assume(bytes(name).length > 0 && bytes(name).length <= 50);
-        vm.assume(bytes(symbol).length > 0 && bytes(symbol).length <= 10);
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 50e6);
         
-        vm.prank(owner);
-        address fundingAddress = factory.createOutcomeFunding(
-            address(usdc),
+        address fundingAddress = factory.createFundingContract(
             address(market),
             PredictionMarket.Outcome.YES,
-            name,
-            symbol
+            title,
+            description,
+            tokenName,
+            tokenSymbol
         );
+        vm.stopPrank();
         
         assertTrue(fundingAddress != address(0));
         
         OutcomeFunding funding = OutcomeFunding(fundingAddress);
-        assertEq(funding.name(), name);
-        assertEq(funding.symbol(), symbol);
+        assertEq(funding.name(), tokenName);
+        assertEq(funding.symbol(), tokenSymbol);
     }
     
-    function testInvariantOutcomeFundingCount() public {
-        // This invariant test ensures that the count is always accurate
-        uint256 count = factory.getOutcomeFundingCount();
+    function testInvariantFundingContractCount() public {
+        uint256 initialCount = factory.getAllFundingContracts().length;
         
-        // Create a new funding
-        vm.prank(owner);
-        factory.createOutcomeFunding(
-            address(usdc),
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 50e6);
+        
+        factory.createFundingContract(
             address(market),
             PredictionMarket.Outcome.YES,
             "Test Fund",
+            "Description",
+            "Test Fund",
             "TEST"
         );
+        vm.stopPrank();
         
-        assertEq(factory.getOutcomeFundingCount(), count + 1);
+        assertEq(factory.getAllFundingContracts().length, initialCount + 1);
+    }
+    
+    function testEventEmission() public {
+        vm.expectEmit(true, true, false, true);
+        emit OutcomeFundingFactory.FundingContractCreated(
+            address(0), // Will be set by the factory
+            address(market),
+            alice,
+            PredictionMarket.Outcome.YES,
+            "Test Fund"
+        );
+        
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 50e6);
+        
+        factory.createFundingContract(
+            address(market),
+            PredictionMarket.Outcome.YES,
+            "Test Fund",
+            "Description",
+            "Test Fund",
+            "TEST"
+        );
+        vm.stopPrank();
+    }
+    
+    function testStatusUpdateEventEmission() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 50e6);
+        
+        address fundingAddress = factory.createFundingContract(
+            address(market),
+            PredictionMarket.Outcome.YES,
+            "Test Fund",
+            "Description",
+            "Test Fund",
+            "TEST"
+        );
+        vm.stopPrank();
+        
+        vm.expectEmit(true, true, false, true);
+        emit OutcomeFundingFactory.FundingContractStatusUpdated(fundingAddress, false);
+        
+        vm.prank(owner);
+        factory.updateFundingContractStatus(fundingAddress, false);
+    }
+    
+    function testMultipleUsersCreatingFundings() public {
+        vm.startPrank(alice);
+        usdc.approve(address(factory), 50e6);
+        
+        address aliceFunding = factory.createFundingContract(
+            address(market),
+            PredictionMarket.Outcome.YES,
+            "Alice Fund",
+            "Description",
+            "Alice Fund",
+            "ALICE"
+        );
+        vm.stopPrank();
+        
+        vm.startPrank(bob);
+        usdc.approve(address(factory), 50e6);
+        
+        address bobFunding = factory.createFundingContract(
+            address(market),
+            PredictionMarket.Outcome.NO,
+            "Bob Fund",
+            "Description",
+            "Bob Fund",
+            "BOB"
+        );
+        vm.stopPrank();
+        
+        vm.startPrank(charlie);
+        usdc.approve(address(factory), 50e6);
+        
+        address charlieFunding = factory.createFundingContract(
+            address(market),
+            PredictionMarket.Outcome.YES,
+            "Charlie Fund",
+            "Description",
+            "Charlie Fund",
+            "CHARLIE"
+        );
+        vm.stopPrank();
+        
+        assertTrue(aliceFunding != address(0));
+        assertTrue(bobFunding != address(0));
+        assertTrue(charlieFunding != address(0));
+        
+        address[] memory allFundings = factory.getAllFundingContracts();
+        assertEq(allFundings.length, 3);
+        
+        address[] memory aliceFundings = factory.getFundingContractsByCreator(alice);
+        assertEq(aliceFundings.length, 1);
+        assertEq(aliceFundings[0], aliceFunding);
+        
+        address[] memory bobFundings = factory.getFundingContractsByCreator(bob);
+        assertEq(bobFundings.length, 1);
+        assertEq(bobFundings[0], bobFunding);
+        
+        address[] memory charlieFundings = factory.getFundingContractsByCreator(charlie);
+        assertEq(charlieFundings.length, 1);
+        assertEq(charlieFundings[0], charlieFunding);
     }
 } 

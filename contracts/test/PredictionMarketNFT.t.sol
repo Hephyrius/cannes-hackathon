@@ -33,19 +33,17 @@ contract PredictionMarketNFTTest is Test {
     function setUp() public {
         usdc = new MockUSDC();
         
+        nft = new PredictionMarketNFT(
+            "Prediction Market NFT",
+            "PMNFT",
+            "https://example.com/images/"
+        );
+        
         market = new PredictionMarket(
             address(usdc),
             "Will Bitcoin reach $100k by 2024?",
             block.timestamp + 30 days
         );
-        
-        nft = new PredictionMarketNFT(
-            address(market),
-            "Prediction Market NFT",
-            "PMNFT"
-        );
-        
-        nft.transferOwnership(owner);
         
         usdc.mint(alice, 50000e6);
         usdc.mint(bob, 30000e6);
@@ -56,47 +54,143 @@ contract PredictionMarketNFTTest is Test {
     function testConstructor() public view {
         assertEq(nft.name(), "Prediction Market NFT");
         assertEq(nft.symbol(), "PMNFT");
-        assertEq(address(nft.market()), address(market));
+        assertEq(nft.marketToTokenId(address(market)), 0);
         assertEq(nft.owner(), owner);
     }
     
-    function testMintNFT() public {
+    function testMintMarketNFT() public {
         vm.prank(owner);
-        uint256 tokenId = nft.mint(alice, "Test NFT", "Description");
+        uint256 tokenId = nft.mintMarketNFT(
+            alice,
+            "Bitcoin $100k Prediction",
+            "Will Bitcoin reach $100k by 2024?",
+            "https://example.com/btc.jpg",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](2)
+        );
         
         assertEq(tokenId, 1);
         assertEq(nft.ownerOf(tokenId), alice);
-        assertEq(nft.tokenURI(tokenId), "Test NFT");
-        assertEq(nft.tokenDescription(tokenId), "Description");
+        assertEq(nft.marketToTokenId(address(market)), tokenId);
+        
+        (
+            string memory title,
+            string memory description,
+            address marketContract,
+            address resolutionContract,
+            uint256 creationTime,
+            bool isResolved,
+            string memory category
+        ) = nft.getMarketMetadata(tokenId);
+        
+        assertEq(title, "Bitcoin $100k Prediction");
+        assertEq(description, "Will Bitcoin reach $100k by 2024?");
+        assertEq(marketContract, address(market));
+        assertEq(resolutionContract, address(0));
+        assertGt(creationTime, 0);
+        assertFalse(isResolved);
+        assertEq(category, "Crypto");
     }
     
-    function testMintNFTOnlyOwner() public {
+    function testMintMarketNFTOnlyOwner() public {
         vm.prank(alice);
         vm.expectRevert("Ownable: caller is not the owner");
-        nft.mint(bob, "Test NFT", "Description");
+        nft.mintMarketNFT(
+            alice,
+            "Test NFT",
+            "Description",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
     }
     
-    function testMintMultipleNFTs() public {
+    function testMintMarketNFTAlreadyExists() public {
+        vm.startPrank(owner);
+        nft.mintMarketNFT(
+            alice,
+            "Test NFT",
+            "Description",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
+        
+        vm.expectRevert("Market NFT already exists");
+        nft.mintMarketNFT(
+            bob,
+            "Test NFT 2",
+            "Description 2",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
+        vm.stopPrank();
+    }
+    
+    function testMintMultipleMarketNFTs() public {
+        PredictionMarket market2 = new PredictionMarket(
+            address(usdc),
+            "Will Ethereum reach $10k by 2024?",
+            block.timestamp + 30 days
+        );
+        
         vm.startPrank(owner);
         
-        uint256 tokenId1 = nft.mint(alice, "NFT 1", "Description 1");
-        uint256 tokenId2 = nft.mint(bob, "NFT 2", "Description 2");
-        uint256 tokenId3 = nft.mint(charlie, "NFT 3", "Description 3");
+        uint256 tokenId1 = nft.mintMarketNFT(
+            alice,
+            "Bitcoin $100k",
+            "Description 1",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
+        
+        uint256 tokenId2 = nft.mintMarketNFT(
+            bob,
+            "Ethereum $10k",
+            "Description 2",
+            "",
+            address(market2),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
         
         vm.stopPrank();
         
         assertEq(tokenId1, 1);
         assertEq(tokenId2, 2);
-        assertEq(tokenId3, 3);
         
         assertEq(nft.ownerOf(tokenId1), alice);
         assertEq(nft.ownerOf(tokenId2), bob);
-        assertEq(nft.ownerOf(tokenId3), charlie);
+        
+        assertEq(nft.marketToTokenId(address(market)), tokenId1);
+        assertEq(nft.marketToTokenId(address(market2)), tokenId2);
     }
     
-    function testTransferNFT() public {
+    function testTransferMarketNFT() public {
         vm.prank(owner);
-        uint256 tokenId = nft.mint(alice, "Test NFT", "Description");
+        uint256 tokenId = nft.mintMarketNFT(
+            alice,
+            "Test NFT",
+            "Description",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
         
         vm.prank(alice);
         nft.transferFrom(alice, bob, tokenId);
@@ -106,7 +200,16 @@ contract PredictionMarketNFTTest is Test {
     
     function testApproveAndTransfer() public {
         vm.prank(owner);
-        uint256 tokenId = nft.mint(alice, "Test NFT", "Description");
+        uint256 tokenId = nft.mintMarketNFT(
+            alice,
+            "Test NFT",
+            "Description",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
         
         vm.prank(alice);
         nft.approve(bob, tokenId);
@@ -119,8 +222,33 @@ contract PredictionMarketNFTTest is Test {
     
     function testSetApprovalForAll() public {
         vm.startPrank(owner);
-        uint256 tokenId1 = nft.mint(alice, "NFT 1", "Description 1");
-        uint256 tokenId2 = nft.mint(alice, "NFT 2", "Description 2");
+        uint256 tokenId1 = nft.mintMarketNFT(
+            alice,
+            "NFT 1",
+            "Description 1",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
+        
+        PredictionMarket market2 = new PredictionMarket(
+            address(usdc),
+            "Will Ethereum reach $10k by 2024?",
+            block.timestamp + 30 days
+        );
+        
+        uint256 tokenId2 = nft.mintMarketNFT(
+            alice,
+            "NFT 2",
+            "Description 2",
+            "",
+            address(market2),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
         vm.stopPrank();
         
         vm.prank(alice);
@@ -134,263 +262,297 @@ contract PredictionMarketNFTTest is Test {
         assertEq(nft.ownerOf(tokenId2), charlie);
     }
     
-    function testBurnNFT() public {
+    function testGetMarketResolution() public {
         vm.prank(owner);
-        uint256 tokenId = nft.mint(alice, "Test NFT", "Description");
+        uint256 tokenId = nft.mintMarketNFT(
+            alice,
+            "Test NFT",
+            "Description",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
         
-        vm.prank(owner);
-        nft.burn(tokenId);
-        
-        vm.expectRevert("ERC721: invalid token ID");
-        nft.ownerOf(tokenId);
+        string memory resolution = nft.getMarketResolution(tokenId);
+        assertEq(resolution, "Unresolved");
     }
     
-    function testBurnNFTOnlyOwner() public {
+    function testGetMarketStatus() public {
         vm.prank(owner);
-        uint256 tokenId = nft.mint(alice, "Test NFT", "Description");
+        uint256 tokenId = nft.mintMarketNFT(
+            alice,
+            "Test NFT",
+            "Description",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
         
-        vm.prank(alice);
-        vm.expectRevert("Ownable: caller is not the owner");
-        nft.burn(tokenId);
+        string memory status = nft.getMarketStatus(tokenId);
+        assertEq(status, "Active");
     }
     
-    function testBurnNonExistentNFT() public {
+    function testGetMarketStatusExpired() public {
         vm.prank(owner);
-        vm.expectRevert("ERC721: invalid token ID");
-        nft.burn(999);
+        uint256 tokenId = nft.mintMarketNFT(
+            alice,
+            "Test NFT",
+            "Description",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
+        
+        vm.warp(block.timestamp + 31 days);
+        
+        string memory status = nft.getMarketStatus(tokenId);
+        assertEq(status, "Expired");
     }
     
-    function testGetTokensByOwner() public {
-        vm.startPrank(owner);
-        nft.mint(alice, "NFT 1", "Description 1");
-        nft.mint(alice, "NFT 2", "Description 2");
-        nft.mint(bob, "NFT 3", "Description 3");
-        nft.mint(alice, "NFT 4", "Description 4");
-        vm.stopPrank();
-        
-        uint256[] memory aliceTokens = nft.getTokensByOwner(alice);
-        uint256[] memory bobTokens = nft.getTokensByOwner(bob);
-        uint256[] memory charlieTokens = nft.getTokensByOwner(charlie);
-        
-        assertEq(aliceTokens.length, 3);
-        assertEq(bobTokens.length, 1);
-        assertEq(charlieTokens.length, 0);
-        
-        assertEq(aliceTokens[0], 1);
-        assertEq(aliceTokens[1], 2);
-        assertEq(aliceTokens[2], 4);
-        assertEq(bobTokens[0], 3);
-    }
-    
-    function testGetAllTokens() public {
-        vm.startPrank(owner);
-        nft.mint(alice, "NFT 1", "Description 1");
-        nft.mint(bob, "NFT 2", "Description 2");
-        nft.mint(charlie, "NFT 3", "Description 3");
-        vm.stopPrank();
-        
-        uint256[] memory allTokens = nft.getAllTokens();
-        
-        assertEq(allTokens.length, 3);
-        assertEq(allTokens[0], 1);
-        assertEq(allTokens[1], 2);
-        assertEq(allTokens[2], 3);
-    }
-    
-    function testGetTokenInfo() public {
+    function testUpdateResolution() public {
         vm.prank(owner);
-        uint256 tokenId = nft.mint(alice, "Test NFT", "Test Description");
+        uint256 tokenId = nft.mintMarketNFT(
+            alice,
+            "Test NFT",
+            "Description",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
+        
+        vm.warp(block.timestamp + 30 days + 1);
+        
+        vm.prank(owner);
+        market.resolveMarket(PredictionMarket.Outcome.YES);
+        
+        vm.prank(owner);
+        nft.updateResolution(address(market));
         
         (
-            address tokenOwner,
-            string memory tokenURI,
-            string memory description,
-            uint256 mintTime
-        ) = nft.getTokenInfo(tokenId);
+            , , , , , bool isResolved,
+        ) = nft.getMarketMetadata(tokenId);
         
-        assertEq(tokenOwner, alice);
-        assertEq(tokenURI, "Test NFT");
-        assertEq(description, "Test Description");
-        assertGt(mintTime, 0);
+        assertTrue(isResolved);
+        // Resolution time is updated internally
+        
+        string memory resolution = nft.getMarketResolution(tokenId);
+        assertEq(resolution, "YES");
+        
+        string memory status = nft.getMarketStatus(tokenId);
+        assertEq(status, "Resolved");
     }
     
-    function testGetTokenInfoNonExistent() public {
-        vm.expectRevert("ERC721: invalid token ID");
-        nft.getTokenInfo(999);
-    }
-    
-    function testTotalSupply() public {
-        assertEq(nft.totalSupply(), 0);
-        
-        vm.startPrank(owner);
-        nft.mint(alice, "NFT 1", "Description 1");
-        assertEq(nft.totalSupply(), 1);
-        
-        nft.mint(bob, "NFT 2", "Description 2");
-        assertEq(nft.totalSupply(), 2);
-        
-        nft.mint(charlie, "NFT 3", "Description 3");
-        assertEq(nft.totalSupply(), 3);
-        vm.stopPrank();
-    }
-    
-    function testTokenByIndex() public {
-        vm.startPrank(owner);
-        nft.mint(alice, "NFT 1", "Description 1");
-        nft.mint(bob, "NFT 2", "Description 2");
-        nft.mint(charlie, "NFT 3", "Description 3");
-        vm.stopPrank();
-        
-        assertEq(nft.tokenByIndex(0), 1);
-        assertEq(nft.tokenByIndex(1), 2);
-        assertEq(nft.tokenByIndex(2), 3);
-    }
-    
-    function testTokenByIndexOutOfBounds() public {
-        vm.expectRevert("ERC721Enumerable: global index out of bounds");
-        nft.tokenByIndex(0);
-    }
-    
-    function testTokenOfOwnerByIndex() public {
-        vm.startPrank(owner);
-        nft.mint(alice, "NFT 1", "Description 1");
-        nft.mint(alice, "NFT 2", "Description 2");
-        nft.mint(bob, "NFT 3", "Description 3");
-        vm.stopPrank();
-        
-        assertEq(nft.tokenOfOwnerByIndex(alice, 0), 1);
-        assertEq(nft.tokenOfOwnerByIndex(alice, 1), 2);
-        assertEq(nft.tokenOfOwnerByIndex(bob, 0), 3);
-    }
-    
-    function testTokenOfOwnerByIndexOutOfBounds() public {
-        vm.expectRevert("ERC721Enumerable: owner index out of bounds");
-        nft.tokenOfOwnerByIndex(alice, 0);
-    }
-    
-    function testBalanceOf() public {
-        assertEq(nft.balanceOf(alice), 0);
-        
-        vm.startPrank(owner);
-        nft.mint(alice, "NFT 1", "Description 1");
-        assertEq(nft.balanceOf(alice), 1);
-        
-        nft.mint(alice, "NFT 2", "Description 2");
-        assertEq(nft.balanceOf(alice), 2);
-        vm.stopPrank();
-    }
-    
-    function testIsApprovedForAll() public {
-        vm.prank(alice);
-        nft.setApprovalForAll(bob, true);
-        
-        assertTrue(nft.isApprovedForAll(alice, bob));
-        assertFalse(nft.isApprovedForAll(alice, charlie));
-    }
-    
-    function testGetApproved() public {
+    function testUpdateResolutionMarketNotResolved() public {
         vm.prank(owner);
-        uint256 tokenId = nft.mint(alice, "Test NFT", "Description");
-        
-        vm.prank(alice);
-        nft.approve(bob, tokenId);
-        
-        assertEq(nft.getApproved(tokenId), bob);
-    }
-    
-    function testGetApprovedNonExistent() public {
-        vm.expectRevert("ERC721: invalid token ID");
-        nft.getApproved(999);
-    }
-    
-    function testTransferToZeroAddress() public {
-        vm.prank(owner);
-        uint256 tokenId = nft.mint(alice, "Test NFT", "Description");
-        
-        vm.prank(alice);
-        vm.expectRevert("ERC721: transfer to the zero address");
-        nft.transferFrom(alice, address(0), tokenId);
-    }
-    
-    function testTransferFromZeroAddress() public {
-        vm.prank(owner);
-        uint256 tokenId = nft.mint(alice, "Test NFT", "Description");
-        
-        vm.expectRevert("ERC721: transfer from the zero address");
-        nft.transferFrom(address(0), bob, tokenId);
-    }
-    
-    function testTransferUnauthorized() public {
-        vm.prank(owner);
-        uint256 tokenId = nft.mint(alice, "Test NFT", "Description");
-        
-        vm.prank(bob);
-        vm.expectRevert("ERC721: caller is not token owner or approved");
-        nft.transferFrom(alice, charlie, tokenId);
-    }
-    
-    function testMintToZeroAddress() public {
-        vm.prank(owner);
-        vm.expectRevert("ERC721: mint to the zero address");
-        nft.mint(address(0), "Test NFT", "Description");
-    }
-    
-    function testFuzzMintNFT(string memory uri, string memory description) public {
-        vm.assume(bytes(uri).length > 0 && bytes(uri).length <= 100);
-        vm.assume(bytes(description).length <= 200);
+        uint256 tokenId = nft.mintMarketNFT(
+            alice,
+            "Test NFT",
+            "Description",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
         
         vm.prank(owner);
-        uint256 tokenId = nft.mint(alice, uri, description);
+        vm.expectRevert("Market not resolved yet");
+        nft.updateResolution(address(market));
+    }
+    
+    function testUpdateResolutionNFTDoesNotExist() public {
+        vm.warp(block.timestamp + 30 days + 1);
         
+        vm.prank(owner);
+        market.resolveMarket(PredictionMarket.Outcome.YES);
+        
+        vm.prank(owner);
+        vm.expectRevert("Market NFT does not exist");
+        nft.updateResolution(address(market));
+    }
+    
+    function testGetMarketResolutionNonExistent() public {
+        vm.expectRevert("Token does not exist");
+        nft.getMarketResolution(999);
+    }
+    
+    function testGetMarketStatusNonExistent() public {
+        vm.expectRevert("Token does not exist");
+        nft.getMarketStatus(999);
+    }
+    
+    function testFuzzMintMarketNFT(string memory title, string memory description, string memory category) public {
+        vm.assume(bytes(title).length > 0 && bytes(title).length <= 100);
+        vm.assume(bytes(description).length <= 500);
+        vm.assume(bytes(category).length <= 50);
+        
+        vm.prank(owner);
+        uint256 tokenId = nft.mintMarketNFT(
+            alice,
+            title,
+            description,
+            "",
+            address(market),
+            address(0),
+            category,
+            new string[](0)
+        );
+        
+        assertEq(tokenId, 1);
         assertEq(nft.ownerOf(tokenId), alice);
-        assertEq(nft.tokenURI(tokenId), uri);
-        assertEq(nft.tokenDescription(tokenId), description);
+        
+        (
+            string memory mintedTitle,
+            string memory mintedDescription,
+            , , , , string memory mintedCategory
+        ) = nft.getMarketMetadata(tokenId);
+        
+        assertEq(mintedTitle, title);
+        assertEq(mintedDescription, description);
+        assertEq(mintedCategory, category);
     }
     
-    function testInvariantTotalSupply() public {
-        uint256 initialSupply = nft.totalSupply();
+    function testInvariantTokenIdIncrement() public {
+        vm.startPrank(owner);
         
-        vm.prank(owner);
-        nft.mint(alice, "Test NFT", "Description");
+        uint256 tokenId1 = nft.mintMarketNFT(
+            alice,
+            "NFT 1",
+            "Description 1",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
         
-        assertEq(nft.totalSupply(), initialSupply + 1);
+        PredictionMarket market2 = new PredictionMarket(
+            address(usdc),
+            "Will Ethereum reach $10k by 2024?",
+            block.timestamp + 30 days
+        );
         
-        vm.prank(owner);
-        nft.burn(1);
+        uint256 tokenId2 = nft.mintMarketNFT(
+            bob,
+            "NFT 2",
+            "Description 2",
+            "",
+            address(market2),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
+        vm.stopPrank();
         
-        assertEq(nft.totalSupply(), initialSupply);
-    }
-    
-    function testInvariantBalanceOf() public {
-        uint256 initialBalance = nft.balanceOf(alice);
-        
-        vm.prank(owner);
-        nft.mint(alice, "Test NFT", "Description");
-        
-        assertEq(nft.balanceOf(alice), initialBalance + 1);
-        
-        vm.prank(owner);
-        nft.burn(1);
-        
-        assertEq(nft.balanceOf(alice), initialBalance);
+        assertEq(tokenId1, 1);
+        assertEq(tokenId2, 2);
     }
     
     function testEventEmission() public {
         vm.expectEmit(true, true, false, true);
-        emit PredictionMarketNFT.NFTMinted(1, alice, "Test NFT", "Description");
+        emit PredictionMarketNFT.MarketNFTMinted(1, address(market), "Test NFT", alice);
         
         vm.prank(owner);
-        nft.mint(alice, "Test NFT", "Description");
+        nft.mintMarketNFT(
+            alice,
+            "Test NFT",
+            "Description",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
     }
     
-    function testBurnEventEmission() public {
+    function testResolutionUpdateEventEmission() public {
         vm.prank(owner);
-        uint256 tokenId = nft.mint(alice, "Test NFT", "Description");
+        uint256 tokenId = nft.mintMarketNFT(
+            alice,
+            "Test NFT",
+            "Description",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
         
-        vm.expectEmit(true, true, false, false);
-        emit PredictionMarketNFT.NFTBurned(tokenId, alice);
+        vm.warp(block.timestamp + 30 days + 1);
         
         vm.prank(owner);
-        nft.burn(tokenId);
+        market.resolveMarket(PredictionMarket.Outcome.YES);
+        
+        vm.expectEmit(true, true, false, true);
+        emit PredictionMarketNFT.MarketResolutionUpdated(tokenId, PredictionMarket.Outcome.YES, 0);
+        
+        vm.prank(owner);
+        nft.updateResolution(address(market));
+    }
+    
+    function testMultipleUsersOwningNFTs() public {
+        vm.startPrank(owner);
+        
+        uint256 aliceToken = nft.mintMarketNFT(
+            alice,
+            "Alice NFT",
+            "Description",
+            "",
+            address(market),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
+        
+        PredictionMarket market2 = new PredictionMarket(
+            address(usdc),
+            "Will Ethereum reach $10k by 2024?",
+            block.timestamp + 30 days
+        );
+        
+        uint256 bobToken = nft.mintMarketNFT(
+            bob,
+            "Bob NFT",
+            "Description",
+            "",
+            address(market2),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
+        
+        PredictionMarket market3 = new PredictionMarket(
+            address(usdc),
+            "Will Solana reach $500 by 2024?",
+            block.timestamp + 30 days
+        );
+        
+        uint256 charlieToken = nft.mintMarketNFT(
+            charlie,
+            "Charlie NFT",
+            "Description",
+            "",
+            address(market3),
+            address(0),
+            "Crypto",
+            new string[](0)
+        );
+        vm.stopPrank();
+        
+        assertEq(nft.ownerOf(aliceToken), alice);
+        assertEq(nft.ownerOf(bobToken), bob);
+        assertEq(nft.ownerOf(charlieToken), charlie);
+        
+        assertEq(nft.marketToTokenId(address(market)), aliceToken);
+        assertEq(nft.marketToTokenId(address(market2)), bobToken);
+        assertEq(nft.marketToTokenId(address(market3)), charlieToken);
     }
 } 
