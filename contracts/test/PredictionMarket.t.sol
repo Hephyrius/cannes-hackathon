@@ -90,4 +90,20 @@ contract PredictionMarketTest is Test {
         // Verify Alice received USDC for her winning tokens
         assertEq(usdc.balanceOf(alice), 10 * USDC_UNIT);
     }
+
+    function testCannotRedeemWithoutWinningTokens() public {
+        vm.prank(alice);
+        market.purchaseTokens(USDC_UNIT);
+        vm.warp(block.timestamp + 2 days);
+        market.resolveMarket(PredictionMarket.Outcome.NO);
+        
+        // Alice redeems her NO tokens first
+        vm.prank(alice);
+        market.redeemWinningTokens(1);
+        
+        // Now Alice has no NO tokens left, so trying to redeem again should fail
+        vm.prank(alice);
+        vm.expectRevert("Insufficient NO tokens");
+        market.redeemWinningTokens(1);
+    }
 } 
