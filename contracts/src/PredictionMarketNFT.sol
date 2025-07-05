@@ -224,21 +224,16 @@ contract PredictionMarketNFT is ERC721, ERC721URIStorage, Ownable {
     }
     
     /**
-     * @dev Get complete market metadata
+     * @dev Get basic market metadata
      */
     function getMarketMetadata(uint256 tokenId) external view returns (
         string memory title,
         string memory description,
-        string memory imageUrl,
         address marketContract,
         address resolutionContract,
         uint256 creationTime,
-        uint256 resolutionTime,
         bool isResolved,
-        string memory category,
-        string[] memory tags,
-        string memory resolution,
-        string memory status
+        string memory category
     ) {
         require(_ownerOf(tokenId) != address(0), "Token does not exist");
         
@@ -247,16 +242,30 @@ contract PredictionMarketNFT is ERC721, ERC721URIStorage, Ownable {
         return (
             metadata.title,
             metadata.description,
-            metadata.imageUrl,
             metadata.marketContract,
             metadata.resolutionContract,
             metadata.creationTime,
-            metadata.resolutionTime,
             metadata.isResolved,
-            metadata.category,
-            metadata.tags,
+            metadata.category
+        );
+    }
+    
+    /**
+     * @dev Get market resolution and status separately
+     */
+    function getMarketResolutionAndStatus(uint256 tokenId) external view returns (
+        string memory resolution,
+        string memory status,
+        uint256 resolutionTime
+    ) {
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+        
+        MarketMetadata storage metadata = marketMetadata[tokenId];
+        
+        return (
             getMarketResolution(tokenId),
-            getMarketStatus(tokenId)
+            getMarketStatus(tokenId),
+            metadata.resolutionTime
         );
     }
     
