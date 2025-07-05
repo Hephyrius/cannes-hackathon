@@ -41,7 +41,7 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
         address _usdc,
         string memory _question,
         uint256 _resolutionTime
-    ) Ownable(msg.sender) {
+    ) Ownable() {
         usdc = IERC20(_usdc);
         question = _question;
         resolutionTime = _resolutionTime;
