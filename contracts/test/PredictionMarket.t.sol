@@ -69,13 +69,25 @@ contract PredictionMarketTest is Test {
         assertEq(usdc.balanceOf(alice), 10 * USDC_UNIT);
     }
 
-    function testCannotRedeemIfNotWinner() public {
+    function testOnlyWinningTokensCanBeRedeemed() public {
         vm.prank(alice);
         market.purchaseTokens(USDC_UNIT);
         vm.warp(block.timestamp + 2 days);
         market.resolveMarket(PredictionMarket.Outcome.NO);
+        
+        // Alice has YES, NO, and POWER tokens, but only NO is the winner
+        // The redeemWinningTokens function automatically redeems the winning token type
+        // So when NO is the winner, it will try to redeem NO tokens
         vm.prank(alice);
-        vm.expectRevert();
         market.redeemWinningTokens(1);
+        
+        // Verify Alice's NO tokens were burned but YES and POWER tokens remain
+        (uint256 yesBal, uint256 noBal, uint256 powerBal) = market.getUserBalances(alice);
+        assertEq(yesBal, 1); // YES tokens still there (losing outcome)
+        assertEq(noBal, 0);  // NO tokens burned (winning outcome)
+        assertEq(powerBal, 1); // POWER tokens still there (losing outcome)
+        
+        // Verify Alice received USDC for her winning tokens
+        assertEq(usdc.balanceOf(alice), 10 * USDC_UNIT);
     }
 } 
