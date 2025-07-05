@@ -16,9 +16,6 @@ contract PredictionMarketFactory is IUniswapV2Factory {
     mapping(address => mapping(address => address)) public override getPair;
     address[] public override allPairs;
     
-    event PairCreated(address indexed token0, address indexed token1, address pair, uint256);
-    event MarketCreated(address indexed market, string question, uint256 resolutionTime);
-    
     constructor(address _feeToSetter) {
         feeToSetter = _feeToSetter;
     }
@@ -50,44 +47,6 @@ contract PredictionMarketFactory is IUniswapV2Factory {
         getPair[token0][token1] = pair;
         getPair[token1][token0] = pair;
         allPairs.push(pair);
-        
-        emit PairCreated(token0, token1, pair, allPairs.length);
-    }
-    
-    /**
-     * @dev Create all pairs for a prediction market
-     */
-    function createMarketPairs() external returns (address yesUsdcPair, address noUsdcPair, address yesNoUsdcPair) {
-        address usdc = address(predictionMarket.usdc());
-        address yesToken = address(predictionMarket.yesToken());
-        address noToken = address(predictionMarket.noToken());
-        address yesNoToken = address(predictionMarket.yesNoToken());
-        
-        // Create YES/USDC pair
-        yesUsdcPair = createPair(yesToken, usdc);
-        
-        // Create NO/USDC pair
-        noUsdcPair = createPair(noToken, usdc);
-        
-        // Create YES-NO/USDC pair
-        yesNoUsdcPair = createPair(yesNoToken, usdc);
-    }
-    
-    /**
-     * @dev Get all market addresses (from the prediction market)
-     */
-    function getAllMarkets() external view returns (address[] memory) {
-        // For now, return just the prediction market address
-        address[] memory markets = new address[](1);
-        markets[0] = address(predictionMarket);
-        return markets;
-    }
-    
-    /**
-     * @dev Get the number of markets
-     */
-    function numberOfMarkets() external view returns (uint256) {
-        return 1; // For now, just the one prediction market
     }
     
     function setFeeTo(address _feeTo) external override {

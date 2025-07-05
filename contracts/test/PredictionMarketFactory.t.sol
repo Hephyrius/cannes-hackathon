@@ -2,7 +2,9 @@
 pragma solidity ^0.8.25;
 
 import "forge-std/Test.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "../src/PredictionMarketFactory.sol";
+import "../src/PredictionMarket.sol";
 
 contract MockUSDC is ERC20 {
     constructor() ERC20("Mock USDC", "USDC") {}
@@ -13,52 +15,83 @@ contract MockUSDC is ERC20 {
 
 contract PredictionMarketFactoryTest is Test {
     MockUSDC usdc;
+    PredictionMarket market;
     PredictionMarketFactory factory;
     address alice = address(0x1);
-    uint256 constant USDC_UNIT = 1e6;
-
+    address bob = address(0x2);
+    
     function setUp() public {
         usdc = new MockUSDC();
-        factory = new PredictionMarketFactory();
+        market = new PredictionMarket(address(usdc), "Test Market", block.timestamp + 1 days);
+        factory = new PredictionMarketFactory(address(this));
+        
+        // Mint USDC to test accounts
+        usdc.mint(alice, 1000 * 1e6);
+        usdc.mint(bob, 1000 * 1e6);
     }
-
-    function testCreateMarket() public {
-        string memory question = "Is this a test?";
-        uint256 resolutionTime = block.timestamp + 1 days;
-        address market = factory.createMarket(address(usdc), question, resolutionTime);
-        assertTrue(market != address(0));
-        assertEq(factory.numberOfMarkets(), 1);
-        address[] memory markets = factory.getAllMarkets();
-        assertEq(markets.length, 1);
-        assertEq(markets[0], market);
+    
+    function testFactoryDeployment() public {
+        assertEq(factory.feeToSetter(), address(this));
+        assertEq(factory.allPairsLength(), 0);
     }
-
-    function testMultipleMarkets() public {
-        for (uint256 i = 0; i < 3; i++) {
-            string memory question = string(abi.encodePacked("Q", vm.toString(i)));
-            uint256 resolutionTime = block.timestamp + (i + 1) * 1 days;
-            factory.createMarket(address(usdc), question, resolutionTime);
-        }
-        assertEq(factory.numberOfMarkets(), 3);
-        address[] memory markets = factory.getAllMarkets();
-        assertEq(markets.length, 3);
+    
+    function testCreatePair() public {
+        address yesToken = address(market.yesToken());
+        address noToken = address(market.noToken());
+        
+        // Create YES/USDC pair
+        address pair = factory.createPair(yesToken, address(usdc));
+        assertTrue(pair != address(0));
+        assertEq(factory.getPair(yesToken, address(usdc)), pair);
+        assertEq(factory.getPair(address(usdc), yesToken), pair);
+        assertEq(factory.allPairsLength(), 1);
+        assertEq(factory.allPairs(0), pair);
+        
+        // Create NO/USDC pair
+        address pair2 = factory.createPair(noToken, address(usdc));
+        assertTrue(pair2 != address(0));
+        assertEq(factory.getPair(noToken, address(usdc)), pair2);
+        assertEq(factory.allPairsLength(), 2);
     }
-
-    function testMarketCreatedEvent() public {
-        string memory question = "Event test?";
-        uint256 resolutionTime = block.timestamp + 1 days;
-        // Deploy and capture the market address
-        vm.recordLogs();
-        address market = factory.createMarket(address(usdc), question, resolutionTime);
-        Vm.Log[] memory entries = vm.getRecordedLogs();
-        bool found = false;
-        for (uint256 i = 0; i < entries.length; i++) {
-            if (entries[i].topics.length > 0 && entries[i].topics[0] == keccak256("MarketCreated(address,string,uint256)")) {
-                address loggedMarket = address(uint160(uint256(entries[i].topics[1])));
-                assertEq(loggedMarket, market);
-                found = true;
-            }
-        }
-        assertTrue(found, "MarketCreated event not found");
+    
+    function testCreatePairSameTokens() public {
+        address yesToken = address(market.yesToken());
+        
+        // Should fail when creating pair with same tokens
+        vm.expectRevert("PredictionMarketFactory: IDENTICAL_ADDRESSES");
+        factory.createPair(yesToken, yesToken);
+    }
+    
+    function testCreatePairZeroAddress() public {
+        address yesToken = address(market.yesToken());
+        
+        // Should fail when creating pair with zero address
+        vm.expectRevert("PredictionMarketFactory: ZERO_ADDRESS");
+        factory.createPair(address(0), yesToken);
+    }
+    
+    function testCreatePairAlreadyExists() public {
+        address yesToken = address(market.yesToken());
+        
+        // Create pair first time
+        factory.createPair(yesToken, address(usdc));
+        
+        // Should fail when creating same pair again
+        vm.expectRevert("PredictionMarketFactory: PAIR_EXISTS");
+        factory.createPair(yesToken, address(usdc));
+    }
+    
+    function testFeeControls() public {
+        // Test fee controls
+        factory.setFeeTo(alice);
+        assertEq(factory.feeTo(), alice);
+        
+        factory.setFeeToSetter(bob);
+        assertEq(factory.feeToSetter(), bob);
+        
+        // Only fee setter can change fees
+        vm.prank(alice);
+        vm.expectRevert("PredictionMarketFactory: FORBIDDEN");
+        factory.setFeeTo(bob);
     }
 } 
