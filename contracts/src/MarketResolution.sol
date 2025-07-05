@@ -317,9 +317,6 @@ contract MarketResolution is Ownable, ReentrancyGuard {
         require(_amount > 0, "Amount must be greater than 0");
         require(_amount <= usdc.balanceOf(address(this)), "Insufficient balance");
         
-        // Transfer to funding contract
-        usdc.transfer(_fundingContract, _amount);
-        
         // Record distribution
         uint256 revenueId = nextRevenueId++;
         revenueDistributions[revenueId] = RevenueDistribution({
@@ -330,9 +327,9 @@ contract MarketResolution is Ownable, ReentrancyGuard {
             distributed: true
         });
         
-        // Add revenue to funding contract
-        OutcomeFunding funding = OutcomeFunding(_fundingContract);
+        // Approve and let the funding contract pull the funds
         usdc.approve(_fundingContract, _amount);
+        OutcomeFunding funding = OutcomeFunding(_fundingContract);
         funding.addRevenue(_source, _amount, "Market resolution revenue");
         
         emit RevenueDistributed(_market, _amount, _source);
