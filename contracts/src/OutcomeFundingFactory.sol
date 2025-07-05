@@ -88,6 +88,9 @@ contract OutcomeFundingFactory is Ownable {
         
         address fundingAddress = address(fundingContract);
         
+        // Transfer ownership to the creator
+        fundingContract.transferOwnership(msg.sender);
+        
         // Store funding info
         fundingContracts[fundingAddress] = FundingInfo({
             fundingContract: fundingAddress,
@@ -137,10 +140,10 @@ contract OutcomeFundingFactory is Ownable {
         require(_targetOutcomes.length == _tokenNames.length, "Array length mismatch");
         require(_targetOutcomes.length == _tokenSymbols.length, "Array length mismatch");
         
-        address[] memory fundingContracts = new address[](_targetOutcomes.length);
+        address[] memory fundingContractAddresses = new address[](_targetOutcomes.length);
         
         for (uint256 i = 0; i < _targetOutcomes.length; i++) {
-            fundingContracts[i] = createFundingContract(
+            fundingContractAddresses[i] = this.createFundingContract(
                 _market,
                 _targetOutcomes[i],
                 _titles[i],
@@ -150,7 +153,7 @@ contract OutcomeFundingFactory is Ownable {
             );
         }
         
-        return fundingContracts;
+        return fundingContractAddresses;
     }
     
     /**
