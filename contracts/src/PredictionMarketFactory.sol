@@ -1,45 +1,102 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import "./PredictionMarket.sol";
+import "./interfaces/IUniswapV2Factory.sol";
+import "./PredictionMarketPair.sol";
 
 /**
  * @title PredictionMarketFactory
- * @dev Deploys PredictionMarket contracts and keeps track of all markets
+ * @dev Factory for creating prediction market pairs, following Uniswap V2 pattern
  */
-contract PredictionMarketFactory {
-    address[] public allMarkets;
+contract PredictionMarketFactory is IUniswapV2Factory {
+    address public override feeTo;
+    address public override feeToSetter;
+    
+    // Mapping from token pair to pair address
+    mapping(address => mapping(address => address)) public override getPair;
+    address[] public override allPairs;
+    
+    event PairCreated(address indexed token0, address indexed token1, address pair, uint256);
     event MarketCreated(address indexed market, string question, uint256 resolutionTime);
-
-    /**
-     * @dev Deploy a new prediction market
-     * @param usdc Address of the USDC token
-     * @param question The market question
-     * @param resolutionTime The unix timestamp when the market can be resolved
-     * @return market The address of the new PredictionMarket
-     */
-    function createMarket(
-        address usdc,
-        string calldata question,
-        uint256 resolutionTime
-    ) external returns (address market) {
-        PredictionMarket newMarket = new PredictionMarket(usdc, question, resolutionTime);
-        allMarkets.push(address(newMarket));
-        emit MarketCreated(address(newMarket), question, resolutionTime);
-        return address(newMarket);
+    
+    constructor(address _feeToSetter) {
+        feeToSetter = _feeToSetter;
     }
-
-    /**
-     * @dev Get the number of markets deployed
-     */
-    function numberOfMarkets() external view returns (uint256) {
-        return allMarkets.length;
+    
+    function allPairsLength() external view override returns (uint256) {
+        return allPairs.length;
     }
-
+    
     /**
-     * @dev Get all market addresses
+     * @dev Create a pair for two tokens
+     */
+    function createPair(address tokenA, address tokenB) external override returns (address pair) {
+        require(tokenA != tokenB, "PredictionMarketFactory: IDENTICAL_ADDRESSES");
+        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+        require(token0 != address(0), "PredictionMarketFactory: ZERO_ADDRESS");
+        require(getPair[token0][token1] == address(0), "PredictionMarketFactory: PAIR_EXISTS");
+        
+        // Create pair contract
+        bytes memory bytecode = type(PredictionMarketPair).creationCode;
+        bytes32 salt = keccak256(abi.encodePacked(token0, token1));
+        assembly {
+            pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
+        }
+        
+        // Initialize the pair
+        IUniswapV2Pair(pair).initialize(token0, token1);
+        
+        // Update mappings
+        getPair[token0][token1] = pair;
+        getPair[token1][token0] = pair;
+        allPairs.push(pair);
+        
+        emit PairCreated(token0, token1, pair, allPairs.length);
+    }
+    
+    /**
+     * @dev Create all pairs for a prediction market
+     */
+    function createMarketPairs() external returns (address yesUsdcPair, address noUsdcPair, address yesNoUsdcPair) {
+        address usdc = address(predictionMarket.usdc());
+        address yesToken = address(predictionMarket.yesToken());
+        address noToken = address(predictionMarket.noToken());
+        address yesNoToken = address(predictionMarket.yesNoToken());
+        
+        // Create YES/USDC pair
+        yesUsdcPair = createPair(yesToken, usdc);
+        
+        // Create NO/USDC pair
+        noUsdcPair = createPair(noToken, usdc);
+        
+        // Create YES-NO/USDC pair
+        yesNoUsdcPair = createPair(yesNoToken, usdc);
+    }
+    
+    /**
+     * @dev Get all market addresses (from the prediction market)
      */
     function getAllMarkets() external view returns (address[] memory) {
-        return allMarkets;
+        // For now, return just the prediction market address
+        address[] memory markets = new address[](1);
+        markets[0] = address(predictionMarket);
+        return markets;
+    }
+    
+    /**
+     * @dev Get the number of markets
+     */
+    function numberOfMarkets() external view returns (uint256) {
+        return 1; // For now, just the one prediction market
+    }
+    
+    function setFeeTo(address _feeTo) external override {
+        require(msg.sender == feeToSetter, "PredictionMarketFactory: FORBIDDEN");
+        feeTo = _feeTo;
+    }
+    
+    function setFeeToSetter(address _feeToSetter) external override {
+        require(msg.sender == feeToSetter, "PredictionMarketFactory: FORBIDDEN");
+        feeToSetter = _feeToSetter;
     }
 } 
