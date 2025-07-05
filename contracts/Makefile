@@ -16,7 +16,7 @@ deps: clean-lib
 		
 .PHONY: test
 test:
-	forge test test/e.sol --ffi -vvv  --fork-url https://ethereum-rpc.publicnode.com 
+	forge test --ffi -vvv  --fork-url https://ethereum-rpc.publicnode.com 
 
 
 .PHONY: clean-lib
