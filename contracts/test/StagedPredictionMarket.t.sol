@@ -3,6 +3,9 @@ pragma solidity ^0.8.25;
 
 import "forge-std/Test.sol";
 import "../src/StagedPredictionMarket.sol";
+import "../src/PredictionMarket.sol";
+import "../src/PredictionMarketFactory.sol";
+import "../src/PredictionMarketVoting.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockUSDC is ERC20 {
@@ -20,7 +23,10 @@ contract MockUSDC is ERC20 {
 }
 
 contract StagedPredictionMarketTest is Test {
-    StagedPredictionMarket public market;
+    StagedPredictionMarket public stagedMarket;
+    PredictionMarket public market;
+    PredictionMarketFactory public factory;
+    PredictionMarketVoting public voting;
     MockUSDC public usdc;
     
     address public owner = address(0x1);
@@ -30,14 +36,20 @@ contract StagedPredictionMarketTest is Test {
     
     function setUp() public {
         usdc = new MockUSDC();
+        factory = new PredictionMarketFactory();
+        voting = new PredictionMarketVoting();
         
-        market = new StagedPredictionMarket(
+        stagedMarket = new StagedPredictionMarket(
+            address(factory),
+            address(voting),
+            address(usdc)
+        );
+        
+        market = new PredictionMarket(
             address(usdc),
             "Will Bitcoin reach $100k by 2024?",
             block.timestamp + 30 days
         );
-        
-        market.transferOwnership(owner);
         
         usdc.mint(alice, 50000e6);
         usdc.mint(bob, 30000e6);
@@ -46,470 +58,615 @@ contract StagedPredictionMarketTest is Test {
     }
     
     function testConstructor() public view {
-        assertEq(market.question(), "Will Bitcoin reach $100k by 2024?");
-        assertEq(market.deadline(), block.timestamp + 30 days);
-        assertEq(market.owner(), owner);
-        assertEq(uint256(market.currentStage()), uint256(StagedPredictionMarket.Stage.CREATION));
+        assertEq(address(stagedMarket.factory()), address(factory));
+        assertEq(address(stagedMarket.voting()), address(voting));
+        assertEq(address(stagedMarket.usdc()), address(usdc));
+        assertEq(stagedMarket.SEEDING_DURATION(), 48 hours);
+        assertEq(stagedMarket.VOTING_DURATION(), 24 hours);
+        assertEq(stagedMarket.WITHDRAWAL_DURATION(), 12 hours);
     }
     
-    function testAdvanceToTrading() public {
+    function testInitializeMarket() public {
         vm.prank(owner);
-        market.advanceToTrading();
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
         
-        assertEq(uint256(market.currentStage()), uint256(StagedPredictionMarket.Stage.TRADING));
+        (
+            StagedPredictionMarket.Stage currentStage,
+            uint256 stageStartTime,
+            uint256 timeInCurrentStage
+        ) = stagedMarket.getMarketStage(address(market));
+        
+        assertEq(uint256(currentStage), uint256(StagedPredictionMarket.Stage.SEEDING));
+        assertGt(stageStartTime, 0);
+        assertGt(timeInCurrentStage, 0);
     }
     
-    function testAdvanceToTradingOnlyOwner() public {
-        vm.prank(alice);
-        vm.expectRevert("Ownable: caller is not the owner");
-        market.advanceToTrading();
-    }
-    
-    function testAdvanceToTradingWrongStage() public {
-        vm.prank(owner);
-        market.advanceToTrading();
+    function testInitializeMarketAlreadyInitialized() public {
+        vm.startPrank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
         
-        vm.expectRevert("Invalid stage transition");
-        market.advanceToTrading();
-    }
-    
-    function testAdvanceToResolution() public {
-        vm.prank(owner);
-        market.advanceToTrading();
-        
-        vm.prank(owner);
-        market.advanceToResolution();
-        
-        assertEq(uint256(market.currentStage()), uint256(StagedPredictionMarket.Stage.RESOLUTION));
-    }
-    
-    function testAdvanceToResolutionOnlyOwner() public {
-        vm.prank(owner);
-        market.advanceToTrading();
-        
-        vm.prank(alice);
-        vm.expectRevert("Ownable: caller is not the owner");
-        market.advanceToResolution();
-    }
-    
-    function testAdvanceToResolutionWrongStage() public {
-        vm.prank(owner);
-        vm.expectRevert("Invalid stage transition");
-        market.advanceToResolution();
-    }
-    
-    function testAdvanceToClosed() public {
-        vm.prank(owner);
-        market.advanceToTrading();
-        
-        vm.prank(owner);
-        market.advanceToResolution();
-        
-        vm.prank(owner);
-        market.advanceToClosed();
-        
-        assertEq(uint256(market.currentStage()), uint256(StagedPredictionMarket.Stage.CLOSED));
-    }
-    
-    function testAdvanceToClosedOnlyOwner() public {
-        vm.prank(owner);
-        market.advanceToTrading();
-        
-        vm.prank(owner);
-        market.advanceToResolution();
-        
-        vm.prank(alice);
-        vm.expectRevert("Ownable: caller is not the owner");
-        market.advanceToClosed();
-    }
-    
-    function testAdvanceToClosedWrongStage() public {
-        vm.prank(owner);
-        vm.expectRevert("Invalid stage transition");
-        market.advanceToClosed();
-    }
-    
-    function testBuyYesTokens() public {
-        vm.prank(owner);
-        market.advanceToTrading();
-        
-        vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        uint256 tokensReceived = market.buyYesTokens(1000e6);
-        vm.stopPrank();
-        
-        assertGt(tokensReceived, 0);
-        assertEq(market.yesToken().balanceOf(alice), tokensReceived);
-    }
-    
-    function testBuyYesTokensWrongStage() public {
-        vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        vm.expectRevert("Market not in trading stage");
-        market.buyYesTokens(1000e6);
+        vm.expectRevert("Already initialized");
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
         vm.stopPrank();
     }
     
-    function testBuyNoTokens() public {
+    function testSeedLiquidity() public {
         vm.prank(owner);
-        market.advanceToTrading();
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
         
         vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        uint256 tokensReceived = market.buyNoTokens(1000e6);
-        vm.stopPrank();
+        market.yesToken().approve(address(stagedMarket), 1000e18);
+        market.noToken().approve(address(stagedMarket), 1000e18);
+        usdc.approve(address(stagedMarket), 200e6);
         
-        assertGt(tokensReceived, 0);
-        assertEq(market.noToken().balanceOf(alice), tokensReceived);
-    }
-    
-    function testBuyNoTokensWrongStage() public {
-        vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        vm.expectRevert("Market not in trading stage");
-        market.buyNoTokens(1000e6);
+        stagedMarket.seedLiquidity(address(market), 1000e18, 1000e18);
         vm.stopPrank();
     }
     
-    function testSellYesTokens() public {
-        vm.prank(owner);
-        market.advanceToTrading();
-        
+    function testSeedLiquidityNotInitialized() public {
         vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        uint256 tokensReceived = market.buyYesTokens(1000e6);
-        
-        market.yesToken().approve(address(market), tokensReceived);
-        uint256 usdcReceived = market.sellYesTokens(tokensReceived);
+        vm.expectRevert("Market not initialized");
+        stagedMarket.seedLiquidity(address(market), 1000e18, 1000e18);
         vm.stopPrank();
-        
-        assertGt(usdcReceived, 0);
     }
     
-    function testSellNoTokens() public {
+    function testSeedLiquidityWrongStage() public {
         vm.prank(owner);
-        market.advanceToTrading();
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        vm.warp(block.timestamp + 48 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startVoting(address(market));
         
         vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        uint256 tokensReceived = market.buyNoTokens(1000e6);
-        
-        market.noToken().approve(address(market), tokensReceived);
-        uint256 usdcReceived = market.sellNoTokens(tokensReceived);
+        vm.expectRevert("Invalid stage");
+        stagedMarket.seedLiquidity(address(market), 1000e18, 1000e18);
         vm.stopPrank();
+    }
+    
+    function testStartVoting() public {
+        vm.prank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
         
-        assertGt(usdcReceived, 0);
+        vm.warp(block.timestamp + 48 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startVoting(address(market));
+        
+        (
+            StagedPredictionMarket.Stage currentStage,
+            , 
+        ) = stagedMarket.getMarketStage(address(market));
+        
+        assertEq(uint256(currentStage), uint256(StagedPredictionMarket.Stage.VOTING));
+    }
+    
+    function testStartVotingNotInitialized() public {
+        vm.prank(owner);
+        vm.expectRevert("Market not initialized");
+        stagedMarket.startVoting(address(market));
+    }
+    
+    function testStartVotingWrongStage() public {
+        vm.prank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        vm.prank(owner);
+        vm.expectRevert("Invalid stage");
+        stagedMarket.startVoting(address(market));
+    }
+    
+    function testStartVotingSeedingNotEnded() public {
+        vm.prank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        vm.prank(owner);
+        vm.expectRevert("Seeding period not ended");
+        stagedMarket.startVoting(address(market));
+    }
+    
+    function testStartWithdrawal() public {
+        vm.prank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        vm.warp(block.timestamp + 48 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startVoting(address(market));
+        
+        vm.warp(block.timestamp + 24 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startWithdrawal(address(market));
+        
+        (
+            StagedPredictionMarket.Stage currentStage,
+            , 
+        ) = stagedMarket.getMarketStage(address(market));
+        
+        assertEq(uint256(currentStage), uint256(StagedPredictionMarket.Stage.WITHDRAWAL));
+    }
+    
+    function testStartWithdrawalNotInitialized() public {
+        vm.prank(owner);
+        vm.expectRevert("Market not initialized");
+        stagedMarket.startWithdrawal(address(market));
+    }
+    
+    function testStartWithdrawalWrongStage() public {
+        vm.prank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        vm.prank(owner);
+        vm.expectRevert("Invalid stage");
+        stagedMarket.startWithdrawal(address(market));
+    }
+    
+    function testStartWithdrawalVotingNotEnded() public {
+        vm.prank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        vm.warp(block.timestamp + 48 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startVoting(address(market));
+        
+        vm.prank(owner);
+        vm.expectRevert("Voting period not ended");
+        stagedMarket.startWithdrawal(address(market));
+    }
+    
+    function testStartTrading() public {
+        vm.prank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        vm.warp(block.timestamp + 48 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startVoting(address(market));
+        
+        vm.warp(block.timestamp + 24 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startWithdrawal(address(market));
+        
+        vm.warp(block.timestamp + 12 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startTrading(address(market));
+        
+        (
+            StagedPredictionMarket.Stage currentStage,
+            , 
+        ) = stagedMarket.getMarketStage(address(market));
+        
+        assertEq(uint256(currentStage), uint256(StagedPredictionMarket.Stage.TRADING));
+    }
+    
+    function testStartTradingNotInitialized() public {
+        vm.prank(owner);
+        vm.expectRevert("Market not initialized");
+        stagedMarket.startTrading(address(market));
+    }
+    
+    function testStartTradingWrongStage() public {
+        vm.prank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        vm.prank(owner);
+        vm.expectRevert("Invalid stage");
+        stagedMarket.startTrading(address(market));
+    }
+    
+    function testStartTradingWithdrawalNotEnded() public {
+        vm.prank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        vm.warp(block.timestamp + 48 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startVoting(address(market));
+        
+        vm.warp(block.timestamp + 24 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startWithdrawal(address(market));
+        
+        vm.prank(owner);
+        vm.expectRevert("Withdrawal period not ended");
+        stagedMarket.startTrading(address(market));
     }
     
     function testResolveMarket() public {
         vm.prank(owner);
-        market.advanceToTrading();
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        vm.warp(block.timestamp + 48 hours + 1);
         
         vm.prank(owner);
-        market.advanceToResolution();
+        stagedMarket.startVoting(address(market));
+        
+        vm.warp(block.timestamp + 24 hours + 1);
         
         vm.prank(owner);
-        market.resolveMarket(StagedPredictionMarket.Outcome.YES);
+        stagedMarket.startWithdrawal(address(market));
         
-        assertEq(uint256(market.outcome()), uint256(StagedPredictionMarket.Outcome.YES));
-        assertTrue(market.isResolved());
+        vm.warp(block.timestamp + 12 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startTrading(address(market));
+        
+        vm.prank(owner);
+        stagedMarket.resolveMarket(address(market), PredictionMarket.Outcome.YES);
+        
+        (
+            StagedPredictionMarket.Stage currentStage,
+            , 
+        ) = stagedMarket.getMarketStage(address(market));
+        
+        assertEq(uint256(currentStage), uint256(StagedPredictionMarket.Stage.RESOLVED));
     }
     
-    function testResolveMarketOnlyOwner() public {
+    function testResolveMarketNotInitialized() public {
         vm.prank(owner);
-        market.advanceToTrading();
-        
-        vm.prank(owner);
-        market.advanceToResolution();
-        
-        vm.prank(alice);
-        vm.expectRevert("Ownable: caller is not the owner");
-        market.resolveMarket(StagedPredictionMarket.Outcome.YES);
+        vm.expectRevert("Market not initialized");
+        stagedMarket.resolveMarket(address(market), PredictionMarket.Outcome.YES);
     }
     
     function testResolveMarketWrongStage() public {
         vm.prank(owner);
-        vm.expectRevert("Market not in resolution stage");
-        market.resolveMarket(StagedPredictionMarket.Outcome.YES);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        vm.prank(owner);
+        vm.expectRevert("Invalid stage");
+        stagedMarket.resolveMarket(address(market), PredictionMarket.Outcome.YES);
     }
     
-    function testResolveMarketAlreadyResolved() public {
-        vm.prank(owner);
-        market.advanceToTrading();
+    function testIsTradingAllowed() public {
+        assertFalse(stagedMarket.isTradingAllowed(address(market)));
         
         vm.prank(owner);
-        market.advanceToResolution();
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        assertFalse(stagedMarket.isTradingAllowed(address(market)));
+        
+        vm.warp(block.timestamp + 48 hours + 1);
         
         vm.prank(owner);
-        market.resolveMarket(StagedPredictionMarket.Outcome.YES);
+        stagedMarket.startVoting(address(market));
         
-        vm.expectRevert("Market already resolved");
-        market.resolveMarket(StagedPredictionMarket.Outcome.NO);
+        assertFalse(stagedMarket.isTradingAllowed(address(market)));
+        
+        vm.warp(block.timestamp + 24 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startWithdrawal(address(market));
+        
+        assertFalse(stagedMarket.isTradingAllowed(address(market)));
+        
+        vm.warp(block.timestamp + 12 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startTrading(address(market));
+        
+        assertTrue(stagedMarket.isTradingAllowed(address(market)));
     }
     
-    function testRedeemWinningTokens() public {
+    function testGetMarketStage() public {
         vm.prank(owner);
-        market.advanceToTrading();
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
         
-        vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        uint256 yesTokens = market.buyYesTokens(1000e6);
-        vm.stopPrank();
-        
-        vm.prank(owner);
-        market.advanceToResolution();
-        
-        vm.prank(owner);
-        market.resolveMarket(StagedPredictionMarket.Outcome.YES);
-        
-        vm.startPrank(alice);
-        market.yesToken().approve(address(market), yesTokens);
-        uint256 usdcReceived = market.redeemWinningTokens(yesTokens);
-        vm.stopPrank();
-        
-        assertGt(usdcReceived, 0);
-    }
-    
-    function testRedeemWinningTokensWrongStage() public {
-        vm.prank(owner);
-        market.advanceToTrading();
-        
-        vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        uint256 yesTokens = market.buyYesTokens(1000e6);
-        vm.stopPrank();
-        
-        vm.startPrank(alice);
-        market.yesToken().approve(address(market), yesTokens);
-        vm.expectRevert("Market not resolved");
-        market.redeemWinningTokens(yesTokens);
-        vm.stopPrank();
-    }
-    
-    function testRedeemLosingTokens() public {
-        vm.prank(owner);
-        market.advanceToTrading();
-        
-        vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        uint256 noTokens = market.buyNoTokens(1000e6);
-        vm.stopPrank();
-        
-        vm.prank(owner);
-        market.advanceToResolution();
-        
-        vm.prank(owner);
-        market.resolveMarket(StagedPredictionMarket.Outcome.YES);
-        
-        vm.startPrank(alice);
-        market.noToken().approve(address(market), noTokens);
-        vm.expectRevert("Cannot redeem losing tokens");
-        market.redeemWinningTokens(noTokens);
-        vm.stopPrank();
-    }
-    
-    function testGetMarketInfo() public {
         (
-            string memory question,
-            uint256 deadline,
-            StagedPredictionMarket.Stage stage,
-            StagedPredictionMarket.Outcome outcome,
-            bool resolved
-        ) = market.getMarketInfo();
+            StagedPredictionMarket.Stage currentStage,
+            uint256 stageStartTime,
+            uint256 timeInCurrentStage
+        ) = stagedMarket.getMarketStage(address(market));
         
-        assertEq(question, "Will Bitcoin reach $100k by 2024?");
-        assertEq(deadline, block.timestamp + 30 days);
-        assertEq(uint256(stage), uint256(StagedPredictionMarket.Stage.CREATION));
-        assertEq(uint256(outcome), uint256(StagedPredictionMarket.Outcome.NONE));
-        assertFalse(resolved);
+        assertEq(uint256(currentStage), uint256(StagedPredictionMarket.Stage.SEEDING));
+        assertGt(stageStartTime, 0);
+        assertGt(timeInCurrentStage, 0);
     }
     
-    function testGetTokenPrices() public {
+    function testGetTimeRemainingInStage() public {
         vm.prank(owner);
-        market.advanceToTrading();
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
         
-        vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        market.buyYesTokens(1000e6);
-        vm.stopPrank();
+        uint256 timeRemaining = stagedMarket.getTimeRemainingInStage(address(market));
+        assertGt(timeRemaining, 0);
+        assertLe(timeRemaining, 48 hours);
         
-        (uint256 yesPrice, uint256 noPrice) = market.getTokenPrices();
+        vm.warp(block.timestamp + 48 hours + 1);
         
-        assertGt(yesPrice, 0);
-        assertGt(noPrice, 0);
+        timeRemaining = stagedMarket.getTimeRemainingInStage(address(market));
+        assertEq(timeRemaining, 0);
     }
     
-    function testGetTokenPricesWrongStage() public {
-        vm.expectRevert("Market not in trading stage");
-        market.getTokenPrices();
-    }
-    
-    function testFuzzBuyTokens(uint256 amount) public {
-        vm.assume(amount > 0 && amount <= 10000e6);
-        
+    function testGetTimeRemainingInStageVoting() public {
         vm.prank(owner);
-        market.advanceToTrading();
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
         
-        vm.startPrank(alice);
-        usdc.approve(address(market), amount);
-        uint256 tokensReceived = market.buyYesTokens(amount);
-        vm.stopPrank();
-        
-        assertGt(tokensReceived, 0);
-    }
-    
-    function testFuzzSellTokens(uint256 amount) public {
-        vm.assume(amount > 0 && amount <= 1000e6);
+        vm.warp(block.timestamp + 48 hours + 1);
         
         vm.prank(owner);
-        market.advanceToTrading();
+        stagedMarket.startVoting(address(market));
+        
+        uint256 timeRemaining = stagedMarket.getTimeRemainingInStage(address(market));
+        assertGt(timeRemaining, 0);
+        assertLe(timeRemaining, 24 hours);
+    }
+    
+    function testGetTimeRemainingInStageWithdrawal() public {
+        vm.prank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        vm.warp(block.timestamp + 48 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startVoting(address(market));
+        
+        vm.warp(block.timestamp + 24 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startWithdrawal(address(market));
+        
+        uint256 timeRemaining = stagedMarket.getTimeRemainingInStage(address(market));
+        assertGt(timeRemaining, 0);
+        assertLe(timeRemaining, 12 hours);
+    }
+    
+    function testGetTimeRemainingInStageTrading() public {
+        vm.prank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        vm.warp(block.timestamp + 48 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startVoting(address(market));
+        
+        vm.warp(block.timestamp + 24 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startWithdrawal(address(market));
+        
+        vm.warp(block.timestamp + 12 hours + 1);
+        
+        vm.prank(owner);
+        stagedMarket.startTrading(address(market));
+        
+        uint256 timeRemaining = stagedMarket.getTimeRemainingInStage(address(market));
+        assertEq(timeRemaining, 0);
+    }
+    
+    function testFuzzSeedLiquidity(uint256 yesAmount, uint256 noAmount) public {
+        vm.assume(yesAmount > 0 && yesAmount <= 10000e18);
+        vm.assume(noAmount > 0 && noAmount <= 10000e18);
+        
+        vm.prank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
         
         vm.startPrank(alice);
-        usdc.approve(address(market), 2000e6);
-        uint256 tokensReceived = market.buyYesTokens(2000e6);
+        market.yesToken().approve(address(stagedMarket), yesAmount);
+        market.noToken().approve(address(stagedMarket), noAmount);
+        usdc.approve(address(stagedMarket), (yesAmount + noAmount) * 5e5 / 50);
         
-        market.yesToken().approve(address(market), tokensReceived);
-        uint256 usdcReceived = market.sellYesTokens(amount);
+        stagedMarket.seedLiquidity(address(market), yesAmount, noAmount);
         vm.stopPrank();
-        
-        assertGt(usdcReceived, 0);
     }
     
     function testInvariantStageProgression() public {
-        assertEq(uint256(market.currentStage()), uint256(StagedPredictionMarket.Stage.CREATION));
+        vm.prank(owner);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
+        
+        (
+            StagedPredictionMarket.Stage currentStage,
+            , 
+        ) = stagedMarket.getMarketStage(address(market));
+        assertEq(uint256(currentStage), uint256(StagedPredictionMarket.Stage.SEEDING));
+        
+        vm.warp(block.timestamp + 48 hours + 1);
         
         vm.prank(owner);
-        market.advanceToTrading();
-        assertEq(uint256(market.currentStage()), uint256(StagedPredictionMarket.Stage.TRADING));
+        stagedMarket.startVoting(address(market));
+        
+        (currentStage, , ) = stagedMarket.getMarketStage(address(market));
+        assertEq(uint256(currentStage), uint256(StagedPredictionMarket.Stage.VOTING));
+        
+        vm.warp(block.timestamp + 24 hours + 1);
         
         vm.prank(owner);
-        market.advanceToResolution();
-        assertEq(uint256(market.currentStage()), uint256(StagedPredictionMarket.Stage.RESOLUTION));
+        stagedMarket.startWithdrawal(address(market));
+        
+        (currentStage, , ) = stagedMarket.getMarketStage(address(market));
+        assertEq(uint256(currentStage), uint256(StagedPredictionMarket.Stage.WITHDRAWAL));
+        
+        vm.warp(block.timestamp + 12 hours + 1);
         
         vm.prank(owner);
-        market.advanceToClosed();
-        assertEq(uint256(market.currentStage()), uint256(StagedPredictionMarket.Stage.CLOSED));
+        stagedMarket.startTrading(address(market));
+        
+        (currentStage, , ) = stagedMarket.getMarketStage(address(market));
+        assertEq(uint256(currentStage), uint256(StagedPredictionMarket.Stage.TRADING));
+        
+        vm.prank(owner);
+        stagedMarket.resolveMarket(address(market), PredictionMarket.Outcome.YES);
+        
+        (currentStage, , ) = stagedMarket.getMarketStage(address(market));
+        assertEq(uint256(currentStage), uint256(StagedPredictionMarket.Stage.RESOLVED));
     }
     
     function testEventEmission() public {
         vm.expectEmit(true, true, false, true);
-        emit StagedPredictionMarket.StageAdvanced(StagedPredictionMarket.Stage.TRADING);
+        emit StagedPredictionMarket.MarketInitialized(address(market), address(0), address(0));
         
         vm.prank(owner);
-        market.advanceToTrading();
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
     }
     
-    function testResolveEventEmission() public {
+    function testStageChangedEvent() public {
         vm.prank(owner);
-        market.advanceToTrading();
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
         
-        vm.prank(owner);
-        market.advanceToResolution();
+        vm.warp(block.timestamp + 48 hours + 1);
         
         vm.expectEmit(true, true, false, true);
-        emit StagedPredictionMarket.MarketResolved(StagedPredictionMarket.Outcome.YES);
+        emit StagedPredictionMarket.StageChanged(address(market), StagedPredictionMarket.Stage.SEEDING, StagedPredictionMarket.Stage.VOTING);
         
         vm.prank(owner);
-        market.resolveMarket(StagedPredictionMarket.Outcome.YES);
+        stagedMarket.startVoting(address(market));
     }
     
-    function testBuyTokensEventEmission() public {
+    function testLiquiditySeededEvent() public {
         vm.prank(owner);
-        market.advanceToTrading();
-        
-        vm.expectEmit(true, true, false, true);
-        emit StagedPredictionMarket.TokensBought(alice, StagedPredictionMarket.Outcome.YES, 1000e6, 0);
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
         
         vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        market.buyYesTokens(1000e6);
+        market.yesToken().approve(address(stagedMarket), 1000e18);
+        market.noToken().approve(address(stagedMarket), 1000e18);
+        usdc.approve(address(stagedMarket), 200e6);
+        
+        vm.expectEmit(true, true, false, true);
+        emit StagedPredictionMarket.LiquiditySeeded(address(market), alice, 0);
+        
+        stagedMarket.seedLiquidity(address(market), 1000e18, 1000e18);
         vm.stopPrank();
     }
     
-    function testSellTokensEventEmission() public {
+    function testMultipleUsersSeeding() public {
         vm.prank(owner);
-        market.advanceToTrading();
+        stagedMarket.initializeMarket(
+            address(market),
+            address(market.yesToken()),
+            address(market.noToken())
+        );
         
         vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        uint256 tokensReceived = market.buyYesTokens(1000e6);
-        
-        market.yesToken().approve(address(market), tokensReceived);
-        
-        vm.expectEmit(true, true, false, true);
-        emit StagedPredictionMarket.TokensSold(alice, StagedPredictionMarket.Outcome.YES, tokensReceived, 0);
-        
-        market.sellYesTokens(tokensReceived);
-        vm.stopPrank();
-    }
-    
-    function testRedeemEventEmission() public {
-        vm.prank(owner);
-        market.advanceToTrading();
-        
-        vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        uint256 yesTokens = market.buyYesTokens(1000e6);
-        vm.stopPrank();
-        
-        vm.prank(owner);
-        market.advanceToResolution();
-        
-        vm.prank(owner);
-        market.resolveMarket(StagedPredictionMarket.Outcome.YES);
-        
-        vm.startPrank(alice);
-        market.yesToken().approve(address(market), yesTokens);
-        
-        vm.expectEmit(true, true, false, true);
-        emit StagedPredictionMarket.TokensRedeemed(alice, StagedPredictionMarket.Outcome.YES, yesTokens, 0);
-        
-        market.redeemWinningTokens(yesTokens);
-        vm.stopPrank();
-    }
-    
-    function testMultipleUsersTrading() public {
-        vm.prank(owner);
-        market.advanceToTrading();
-        
-        vm.startPrank(alice);
-        usdc.approve(address(market), 1000e6);
-        uint256 aliceYesTokens = market.buyYesTokens(1000e6);
+        market.yesToken().approve(address(stagedMarket), 1000e18);
+        market.noToken().approve(address(stagedMarket), 1000e18);
+        usdc.approve(address(stagedMarket), 200e6);
+        stagedMarket.seedLiquidity(address(market), 1000e18, 1000e18);
         vm.stopPrank();
         
         vm.startPrank(bob);
-        usdc.approve(address(market), 1000e6);
-        uint256 bobNoTokens = market.buyNoTokens(1000e6);
+        market.yesToken().approve(address(stagedMarket), 800e18);
+        market.noToken().approve(address(stagedMarket), 800e18);
+        usdc.approve(address(stagedMarket), 160e6);
+        stagedMarket.seedLiquidity(address(market), 800e18, 800e18);
         vm.stopPrank();
         
         vm.startPrank(charlie);
-        usdc.approve(address(market), 1000e6);
-        uint256 charlieYesTokens = market.buyYesTokens(1000e6);
+        market.yesToken().approve(address(stagedMarket), 500e18);
+        market.noToken().approve(address(stagedMarket), 500e18);
+        usdc.approve(address(stagedMarket), 100e6);
+        stagedMarket.seedLiquidity(address(market), 500e18, 500e18);
         vm.stopPrank();
-        
-        assertGt(aliceYesTokens, 0);
-        assertGt(bobNoTokens, 0);
-        assertGt(charlieYesTokens, 0);
-        
-        assertEq(market.yesToken().balanceOf(alice), aliceYesTokens);
-        assertEq(market.noToken().balanceOf(bob), bobNoTokens);
-        assertEq(market.yesToken().balanceOf(charlie), charlieYesTokens);
-    }
-    
-    function testPriceImpact() public {
-        vm.prank(owner);
-        market.advanceToTrading();
-        
-        vm.startPrank(alice);
-        usdc.approve(address(market), 10000e6);
-        
-        uint256 firstBuy = market.buyYesTokens(1000e6);
-        uint256 secondBuy = market.buyYesTokens(1000e6);
-        uint256 thirdBuy = market.buyYesTokens(1000e6);
-        vm.stopPrank();
-        
-        // Price should increase with each buy
-        assertGt(firstBuy, secondBuy);
-        assertGt(secondBuy, thirdBuy);
     }
 } 
