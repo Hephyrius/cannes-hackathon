@@ -1,0 +1,56 @@
+No files changed, compilation skipped
+Script ran successfully.
+
+== Logs ==
+  === DEPLOYING TO LOCAL TESTNET ===
+  Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+  Balance: 10000 ETH
+  
+  Deploying Mock USDC...
+  Mock USDC deployed at: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+  Total supply: 1000000 USDC
+  
+  Deploying Market Factory...
+  Factory deployed at: 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+  
+  Creating sample market...
+  Sample market deployed at: 0xCafac3dD18aC6c6e92c921884f9E4176737C052c
+  Market count: 1
+  
+  Market question: Will ETH reach $5000 by end of 2024?
+  Current phase: 0
+  YES token: 0xAe367415f4BDe0aDEE3e59C35221d259f517413E
+  NO token: 0x4D17b728F3E78e62Ac86D585bE00738Eae7528C6
+  
+  === DEPLOYMENT SUMMARY ===
+  Mock USDC:      0x5FbDB2315678afecb367f032d93F642f64180aa3
+  Factory:        0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+  Sample Market:  0xCafac3dD18aC6c6e92c921884f9E4176737C052c
+  YES Token:      0xAe367415f4BDe0aDEE3e59C35221d259f517413E
+  NO Token:       0x4D17b728F3E78e62Ac86D585bE00738Eae7528C6
+  
+  Deployment successful!
+
+## Setting up 1 EVM.
+
+==========================
+
+Chain 31337
+
+Estimated gas price: 2.000000001 gwei
+
+Estimated total gas used for script: 9974962
+
+Estimated amount required: 0.019949924009974962 ETH
+
+==========================
+
+
+==========================
+
+ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
+
+Transactions saved to: /mnt/c/Users/harni/Documents/GitHub/cannes-hackathon/contracts/broadcast/LocalDeploy.s.sol/31337/run-latest.json
+
+Sensitive values saved to: /mnt/c/Users/harni/Documents/GitHub/cannes-hackathon/contracts/cache/LocalDeploy.s.sol/31337/run-latest.json
+
