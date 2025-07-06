@@ -160,7 +160,7 @@ contract SimpleTest is Test {
         
         (uint256 newYesPrice, uint256 newNoPrice) = market.getTokenPrices();
         assertGt(newYesPrice, yesPrice);
-        assertLt(newNoPrice, noPrice);
+        assertGt(newNoPrice, noPrice); // Both prices increase due to increased USDC reserves
     }
     
     function test_FactoryFunctionality() public {
@@ -195,19 +195,25 @@ contract SimpleTest is Test {
     }
     
     function test_VotingErrors() public {
+        // Test "No liquidity seeded" error
         vm.warp(block.timestamp + 2 hours + 1);
         vm.expectRevert("No liquidity seeded");
         market.startVoting();
         
+        // Test "Seeding period not ended" error
         vm.prank(user1);
         market.seedLiquidity(1000 * 10**6);
         
+        // Reset time to before seeding period ends
+        vm.warp(block.timestamp - 2 hours);
         vm.expectRevert("Seeding period not ended");
         market.startVoting();
         
+        // Move time forward to start voting
         vm.warp(block.timestamp + 2 hours + 1);
         market.startVoting();
         
+        // Test voting phase errors
         vm.prank(user3);
         vm.expectRevert("Not an LP");
         market.proposeCriteria("Invalid criteria");

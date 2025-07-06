@@ -174,6 +174,10 @@ contract DeployTest is Test {
         uint256 marketCreationGas = gasBefore - gasleft();
         console.log("Market creation gas:", marketCreationGas);
         
+        // Approve USDC spending for the new market
+        vm.prank(lp1);
+        usdc.approve(newMarket, type(uint256).max);
+        
         // Test seeding gas
         gasBefore = gasleft();
         vm.prank(lp1);
