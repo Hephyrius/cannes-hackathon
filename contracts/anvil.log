@@ -149,3 +149,439 @@ eth_getTransactionReceipt
 eth_getTransactionReceipt
 eth_getTransactionReceipt
 eth_getTransactionReceipt
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+
+    Transaction: 0x749b0748379d98df2c71224bf92ff21c9db8312a94e53b62b685869ad9fd061f
+    Gas used: 51054
+
+eth_blockNumber
+    Block Number: 3
+    Block Hash: 0x84606585bac07195d83ef6270b7e39500f43ccf0e6d03cd02a74c4f599bba3a2
+    Block Time: "Sun, 6 Jul 2025 02:54:00 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+
+eth_getTransactionReceipt
+    Transaction: 0x489d9b8a47e20df0dee9d70130d68d41c08c06279a13994f73d1295f51d4068e
+    Gas used: 51042
+
+    Block Number: 4
+    Block Hash: 0xe91944795e45d2fa595fa4414dfb563095e79025f4c4d5b9bb245aa8d0e72540
+    Block Time: "Sun, 6 Jul 2025 02:54:05 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_getTransactionReceipt
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+eth_getTransactionReceipt
+
+    Transaction: 0x986ec61ea3f96f327ea42f32e7c1e63d741e60b95474a155fc244993ebdc799a
+    Gas used: 51054
+
+    Block Number: 5
+    Block Hash: 0x9446609a652eda2a0edac0916a27b60954017ffbef8ddd584b462da70f8b73b2
+    Block Time: "Sun, 6 Jul 2025 02:54:08 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_getTransactionReceipt
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+
+    Transaction: 0x2aa1b33d865c7607e856a1cbb6547cd82e37c4e8a28ce7a4855510e8ec5404e1
+    Gas used: 46244
+
+    Block Number: 6
+    Block Hash: 0xa2ede3236fa922ea22d16d84d840352516f8c4738fbd1cb826c2af58a4f5a680
+    Block Time: "Sun, 6 Jul 2025 02:54:11 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+
+    Transaction: 0xb64996235f2f270d2a2b98b56aff6fca8dce724db312d93eef34de8e1b2cb9a5
+    Gas used: 46244
+
+eth_getTransactionReceipt
+    Block Number: 7
+    Block Hash: 0xf65a6279d49a4750d56190559ce3107db01ff96d6ed32ad59814a6e417da5e73
+    Block Time: "Sun, 6 Jul 2025 02:54:14 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_getTransactionReceipt
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+
+    Transaction: 0x29de9558fa7b2737c542eb2b5ba2c4844055421da6c8d736ba433f2d1cee31f3
+    Gas used: 46244
+
+    Block Number: 8
+    Block Hash: 0xd7063944cb13d3a91211dcdc42fc74794efab7632ead7d872f3d103c3396b402
+    Block Time: "Sun, 6 Jul 2025 02:54:18 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+
+    Transaction: 0x4126662d5b0e308cc56c158692e7ff394a71bfd3b9f28a2d048b53cfdfccb3de
+    Gas used: 211974
+
+    Block Number: 9
+    Block Hash: 0xa2ceac78dd9615594e26ac10a817bc4bd76da3521a0f854ba18a48fa99114232
+eth_getTransactionReceipt
+    Block Time: "Sun, 6 Jul 2025 02:54:22 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_getTransactionReceipt
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+eth_getTransactionReceipt
+
+    Transaction: 0xc6e7cd757a85f58cd5f7ea6887dc96b460b18ec9eb2d1360cf630bc8034ca74d
+    Gas used: 109374
+
+    Block Number: 10
+    Block Hash: 0x38890ed836a7bf3ab3088391558668809b4e1c3e656dba17cde269ac866995dd
+    Block Time: "Sun, 6 Jul 2025 02:54:26 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_getTransactionReceipt
+evm_increaseTime
+evm_mine
+
+    Block Number: 11
+    Block Hash: 0x37ddecdfa6dc5cbc8e59788a08f73306d1ffea5b7e6b64d1ce6d2efd2be4e6ec
+    Block Time: "Sun, 6 Jul 2025 04:54:34 +0000"
+
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+
+    Transaction: 0x0aa3083043216b0cd946002873ad796d124abf3352fd0a41b0acf156173f43cf
+    Gas used: 111829
+
+    Block Number: 12
+    Block Hash: 0x9a7e2bff5174d6a72ff5d56a4acc1fadfbf4e5c7f8900f1b7d44d2d3ddca351f
+    Block Time: "Sun, 6 Jul 2025 04:54:41 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+
+    Transaction: 0x2c0afb8277e0a007a1dbd5ae91d48db2f2cf1f8584caa208f8fbfcd176fe0b5d
+    Gas used: 186233
+
+    Block Number: 13
+    Block Hash: 0x806d4fecc5af4426a9d59848ee1fb654d7aa5d34815f5ff1fea3921e886187ce
+    Block Time: "Sun, 6 Jul 2025 04:54:44 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+
+    Transaction: 0xb71ce0fed75971fdea23cf6b6e0c308d335ecde3ddbaad3a19d5a544d102d81e
+    Gas used: 169109
+
+    Block Number: 14
+    Block Hash: 0xb038412d644900e898f775ca1cb20d3169bca1e7661129ac683aafe1ff61041c
+    Block Time: "Sun, 6 Jul 2025 04:54:47 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+
+    Transaction: 0xa45e34f5b3de5a6dd54ebd23f74393c893502a19d70cced0c92860deaa9e5a14
+    Gas used: 74596
+
+eth_getTransactionReceipt
+    Block Number: 15
+    Block Hash: 0x72e12807c5228063053ea7118450a128bbfca5c6cd6f5eec09fdf523b367a9a2
+    Block Time: "Sun, 6 Jul 2025 04:54:53 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_getTransactionReceipt
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+eth_getTransactionReceipt
+
+    Transaction: 0xb2d7ad4f86e15902c890f32cca092658c07516a119719b1ff0de807f4cce1132
+    Gas used: 74572
+
+    Block Number: 16
+    Block Hash: 0x321e6c3c925f9af0bbc69c6d3b8042c2bd76609bdc8dede924ec428d683b5b4f
+    Block Time: "Sun, 6 Jul 2025 04:55:00 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_getTransactionReceipt
+evm_increaseTime
+evm_mine
+
+    Block Number: 17
+    Block Hash: 0xc1141f9c8baf552b0370afabe4b14f3ff19f0737780f1655f035b96905af0acd
+    Block Time: "Sun, 6 Jul 2025 05:55:17 +0000"
+
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+
+    Transaction: 0xf8c22b378e1f6edda636525c7d2fc2239eab5e20a5606deb308c642565763a04
+    Gas used: 122082
+
+    Block Number: 18
+    Block Hash: 0xcd134299c363d15297f2fa0a5cc2e88102b6030ae2ba7c0e3efc421dda2bf7c7
+    Block Time: "Sun, 6 Jul 2025 05:55:22 +0000"
+
+eth_getTransactionReceipt
+eth_blockNumber
+eth_getBlockByNumber
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+
+    Transaction: 0xb17a180616c265ded663d9b0c3285eeae09795d2dbca03cce202539cdcd3a9e2
+    Gas used: 94715
+
+    Block Number: 19
+    Block Hash: 0xcb49e4c71e41335f995b828daa80b959c5224a66ebd37e0d92a3bdf3de0ab083
+    Block Time: "Sun, 6 Jul 2025 05:55:30 +0000"
+
+eth_getTransactionReceipt
+eth_getBlockByNumber
+eth_chainId
+eth_getTransactionCount
+eth_feeHistory
+eth_estimateGas
+eth_sendRawTransaction
+eth_blockNumber
+eth_getTransactionReceipt
+
+    Transaction: 0xb29d4e5f41aa1f96d4fc01c2ee0ea581f8fbbbfa81b10da3bf811fee671a4b63
+    Gas used: 93022
+
+    Block Number: 20
+    Block Hash: 0x8ff9cda311bcc345d4a67f9a015311c76507d4d81836259727ab3ac12d88c4ca
+eth_getBlockByNumber
+eth_getTransactionReceipt
+    Block Time: "Sun, 6 Jul 2025 05:55:35 +0000"
+
+eth_getTransactionReceipt
+eth_chainId
+eth_getTransactionCount
+eth_call
+eth_chainId
+eth_getTransactionCount
+eth_call
+eth_chainId
+eth_getTransactionCount
+eth_call
+eth_chainId
+eth_getTransactionCount
+eth_call
+eth_chainId
+eth_getTransactionCount
+eth_call
+eth_chainId
+eth_getTransactionCount
+eth_call
+eth_chainId
+eth_getTransactionCount
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_chainId
+eth_blockNumber
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBalance
+eth_getBlockByNumber
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_networkId
+eth_blockNumber
+eth_getBalance
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_getBalance
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_getBalance
+eth_call
+eth_call
+eth_call
+eth_getBalance
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_getBalance
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_getBalance
+eth_call
+eth_call
+eth_call
+eth_call
+eth_getBalance
+eth_call
+eth_call
+eth_getBalance
+eth_call
+eth_call
+eth_getBalance
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
