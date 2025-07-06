@@ -1,45 +1,68 @@
-# 🌐 Network Deployment Summary
+# 🌐 Testnet Deployment Summary
 
 ## Quick Reference Table
 
-| Network | Chain ID | Gas Token | USDC Address | RPC URL | Deployment Script |
-|---------|----------|-----------|--------------|---------|-------------------|
-| **Base** 🔵 | 8453 | ETH | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | https://mainnet.base.org | `deploy_base.bat` |
-| **Mantle** 🟢 | 5000 | MNT | `0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9` | https://rpc.mantle.xyz | `deploy_mantle.bat` |
-| **Flow** 🟣 | 747 | FLOW | `0xF1815bd50389c46847f0Bda824eC8da914045D14` | https://mainnet.evm.nodes.onflow.org | `deploy_flow.bat` |
-| **Local** 🖥️ | 31337 | ETH | Mock USDC | http://localhost:8545 | `start_anvil.bat` + `deploy_windows.bat` |
+| Network | Chain ID | Gas Token | Token Address | RPC URL | Deployment Script |
+|---------|----------|-----------|---------------|---------|-------------------|
+| **Mantle Testnet** 🟢 | 5001 | MNT (testnet) | Test USDC (deployed, 18 decimals) | https://rpc.testnet.mantle.xyz | `deploy_mantle.bat` |
+| **Flow Testnet** 🟣 | 545 | FLOW (testnet) | `0xd7d43ab7b365f0d0789aE83F4385fA710FfdC98F` (USDF, 18 decimals) | https://testnet.evm.nodes.onflow.org | `deploy_flow.bat` |
+| **Local** 🖥️ | 31337 | ETH | Mock USDC (6 decimals) | http://localhost:8545 | `start_anvil.bat` + `deploy_windows.bat` |
 
 ## Demo Markets
 
 | Network | Demo Market Question |
 |---------|---------------------|
-| **Base** | "Will Bitcoin reach $100,000 by end of 2024?" |
-| **Mantle** | "Will Ethereum reach $5,000 by end of 2024?" |
-| **Flow** | "Will Flow reach $10 by end of 2024?" |
+| **Mantle Testnet** | "Will Mantle reach $5 by end of 2024?" |
+| **Flow Testnet** | "Will Flow reach $10 by end of 2024?" |
 | **Local** | "Will ETH reach $5000 by end of 2024?" |
+
+## Network Details
+
+### Mantle Testnet 🟢
+- **Production Ready**: ❌ Testnet only
+- **Gas Costs**: Free (testnet)
+- **Token**: Test USDC (18 decimals, deployed by script)
+- **Explorer**: https://explorer.testnet.mantle.xyz
+- **Faucet**: https://faucet.testnet.mantle.xyz
+- **Features**: Faucet function for 1000 test tokens
+
+### Flow Testnet 🟣
+- **Production Ready**: ❌ Testnet only
+- **Gas Costs**: Free (testnet)
+- **Token**: USDF (18 decimals, existing contract)
+- **Explorer**: https://testnet.flowscan.org
+- **Faucet**: https://testnet-faucet.onflow.org
+- **Features**: Existing USDF token with 18 decimals
+
+### Local Development 🖥️
+- **Production Ready**: ❌ Development only
+- **Gas Costs**: Free (local blockchain)
+- **Token**: Mock USDC (6 decimals, 1M supply)
+- **Explorer**: N/A (local)
+- **Accounts**: 4 pre-funded accounts with 10,000 ETH each
 
 ## Hackathon Settings
 
 - ⚡ **Phase Duration**: 1 minute each (Seeding → Voting → Trading)
-- 💰 **Minimum Amounts**: 0.000001 USDC (1 wei)
+- 💰 **Minimum Amounts**: 0.000001 tokens (1e12 wei for 18 decimals)
 - 🔧 **Automated Deployment**: One-click batch scripts
 - 🎯 **Ready for Demo**: Pre-configured markets
+- 🧪 **Free Testing**: Testnet deployment with free tokens
 
 ## Quick Start Commands
 
 ```bash
 # Choose your network:
-./deploy_base.bat     # Deploy to Base
-./deploy_mantle.bat   # Deploy to Mantle  
-./deploy_flow.bat     # Deploy to Flow
+./deploy_mantle.bat   # Deploy to Mantle Testnet
+./deploy_flow.bat     # Deploy to Flow Testnet
 ./start_anvil.bat     # Start local blockchain
 ```
 
 ## Resources
 
-- **Explorers**: BaseScan, MantleScan, FlowScan
-- **Bridges**: bridge.base.org, bridge.mantle.xyz, port.onflow.org
-- **Docs**: Base, Mantle, Flow developer documentation
+- **Explorers**: Testnet explorers for both networks
+- **Faucets**: Free testnet tokens for gas and trading
+- **Docs**: Mantle and Flow developer documentation
 - **Support**: Discord communities for each network
 
 Perfect for hackathon demos with rapid phase transitions! 🚀 

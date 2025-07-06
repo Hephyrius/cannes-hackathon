@@ -2,41 +2,33 @@
 
 ## Quick Overview
 
-Your prediction market is now ready for deployment on **Base**, **Mantle**, and **Flow** networks with hackathon-optimized settings:
+Your prediction market is now ready for deployment on **Mantle Testnet** and **Flow Testnet** with hackathon-optimized settings:
 
 - ⚡ **1-minute phases** for rapid demos
-- 💰 **0.000001 USDC minimum** to save on testing costs
-- 🔧 **Automated deployment scripts** for all networks
+- 💰 **0.000001 token minimum** to save on testing costs
+- 🧪 **Testnet deployment** with free test tokens
+- 🔧 **Automated deployment scripts** for both networks
 - 🎯 **Pre-configured demo markets** ready to go
 
 ## 🌐 Network Configurations
 
-### Base Network 🔵
-- **Network Name**: Base
-- **RPC URL**: `https://mainnet.base.org`
-- **Chain ID**: `8453`
-- **Gas Token**: ETH
-- **USDC Address**: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
-- **Explorer**: https://basescan.org
-- **Bridge**: https://bridge.base.org
+### Mantle Testnet 🟢
+- **Network Name**: Mantle Testnet
+- **RPC URL**: `https://rpc.testnet.mantle.xyz`
+- **Chain ID**: `5001`
+- **Gas Token**: MNT (testnet)
+- **Token**: Test USDC (deployed by script, 18 decimals)
+- **Explorer**: https://explorer.testnet.mantle.xyz
+- **Faucet**: https://faucet.testnet.mantle.xyz
 
-### Mantle Network 🟢
-- **Network Name**: Mantle
-- **RPC URL**: `https://rpc.mantle.xyz`
-- **Chain ID**: `5000`
-- **Gas Token**: MNT
-- **USDC Address**: `0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9`
-- **Explorer**: https://explorer.mantle.xyz
-- **Bridge**: https://bridge.mantle.xyz
-
-### Flow Network 🟣
-- **Network Name**: Flow EVM
-- **RPC URL**: `https://mainnet.evm.nodes.onflow.org`
-- **Chain ID**: `747`
-- **Gas Token**: FLOW
-- **USDC Address**: `0xF1815bd50389c46847f0Bda824eC8da914045D14`
-- **Explorer**: https://evm.flowscan.org
-- **Portal**: https://port.onflow.org
+### Flow Testnet 🟣
+- **Network Name**: Flow Testnet
+- **RPC URL**: `https://testnet.evm.nodes.onflow.org`
+- **Chain ID**: `545`
+- **Gas Token**: FLOW (testnet)
+- **Token**: USDF `0xd7d43ab7b365f0d0789aE83F4385fA710FfdC98F` (18 decimals)
+- **Explorer**: https://testnet.flowscan.org
+- **Faucet**: https://testnet-faucet.onflow.org
 
 ## 📦 Deployment Options
 
@@ -49,21 +41,15 @@ Your prediction market is now ready for deployment on **Base**, **Mantle**, and 
 ./deploy_windows.bat
 ```
 
-### Option 2: Deploy to Base
+### Option 2: Deploy to Mantle Testnet
 ```bash
-# Deploy to Base mainnet
-./deploy_base.bat
-```
-
-### Option 3: Deploy to Mantle
-```bash
-# Deploy to Mantle mainnet
+# Deploy to Mantle testnet with test USDC
 ./deploy_mantle.bat
 ```
 
-### Option 4: Deploy to Flow
+### Option 3: Deploy to Flow Testnet
 ```bash
-# Deploy to Flow mainnet
+# Deploy to Flow testnet with USDF
 ./deploy_flow.bat
 ```
 
@@ -75,14 +61,14 @@ Your prediction market is now ready for deployment on **Base**, **Mantle**, and 
 - **Trading Phase**: Unlimited ♾️
 
 ### Minimum Amounts (Cost-Effective)
-- **Min Seed**: 0.000001 USDC (1 wei)
-- **Min Trade**: 0.000001 USDC (1 wei)
+- **Min Seed**: 0.000001 tokens (1e12 wei for 18 decimals)
+- **Min Trade**: 0.000001 tokens (1e12 wei for 18 decimals)
 - **No maximum limits**
+- **Free test tokens** available on both testnets
 
 ### Demo Markets
-- **Base**: "Will Bitcoin reach $100,000 by end of 2024?"
-- **Mantle**: "Will Ethereum reach $5,000 by end of 2024?"
-- **Flow**: "Will Flow reach $10 by end of 2024?"
+- **Mantle Testnet**: "Will Mantle reach $5 by end of 2024?"
+- **Flow Testnet**: "Will Flow reach $10 by end of 2024?"
 
 ## 🎯 Quick Demo Flow
 
@@ -106,20 +92,17 @@ Your prediction market is now ready for deployment on **Base**, **Mantle**, and 
 ## 💳 Getting Started
 
 ### 1. Setup Wallet
-Add networks to MetaMask:
-- Base: Use bridge.base.org
-- Mantle: Use bridge.mantle.xyz
-- Flow: Use port.onflow.org
+Add testnet networks to MetaMask:
+- Mantle Testnet: Chain ID 5001
+- Flow Testnet: Chain ID 545
 
-### 2. Get Gas Tokens
-- **Base**: Need ETH for gas fees
-- **Mantle**: Need MNT for gas fees
-- **Flow**: Need FLOW for gas fees
+### 2. Get Testnet Gas Tokens
+- **Mantle**: Get testnet MNT from https://faucet.testnet.mantle.xyz
+- **Flow**: Get testnet FLOW from https://testnet-faucet.onflow.org
 
-### 3. Get USDC
-- **Base**: Bridge from Ethereum or buy on DEX
-- **Mantle**: Bridge from Ethereum or buy on DEX
-- **Flow**: Bridge from other networks or buy on DEX
+### 3. Get Test Tokens
+- **Mantle**: Use faucet() function on deployed Test USDC contract (18 decimals)
+- **Flow**: Get USDF tokens from testnet faucet (18 decimals)
 
 ### 4. Deploy & Test
 Run deployment script for your chosen network
@@ -221,8 +204,9 @@ const market = new ethers.Contract(MARKET_ADDRESS, MarketABI, signer);
 
 Your prediction market is now optimized for hackathon success with:
 - ✅ Rapid demo timing (1-minute phases)
-- ✅ Cost-effective minimums (0.000001 USDC)
-- ✅ Three major networks (Base + Mantle + Flow)
+- ✅ Cost-effective minimums (0.000001 tokens)
+- ✅ Two testnet networks (Mantle + Flow)
+- ✅ Free test tokens (18 decimals support)
 - ✅ Automated deployment scripts
 - ✅ Pre-configured demo markets
 
