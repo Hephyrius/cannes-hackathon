@@ -83,9 +83,12 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
         lpContributions[msg.sender] += amount;
         totalLPContributions += amount;
         
-        // Mint equal amounts of YES and NO tokens to maintain balance
-        yesToken.mint(address(this), amount);
-        noToken.mint(address(this), amount);
+        // Mint 2x tokens to set initial price at $0.5 each
+        // Price = (usdcReserves * 1e6) / tokenReserves
+        // For $0.5 price: tokenReserves = 2 * usdcReserves
+        uint256 tokenAmount = amount * 2;
+        yesToken.mint(address(this), tokenAmount);
+        noToken.mint(address(this), tokenAmount);
         
         emit LiquiditySeeded(msg.sender, amount);
     }
