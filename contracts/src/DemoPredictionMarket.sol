@@ -7,11 +7,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /**
- * @title SimplePredictionMarket
- * @dev Simplified prediction market focusing on resolution criteria selection
+ * @title DemoPredictionMarket
+ * @dev Demo version with 1-minute phases for hackathon demonstrations
  * Flow: Create → LP Seeding → Vote on Criteria → Trading Opens
  */
-contract SimplePredictionMarket is Ownable, ReentrancyGuard {
+contract DemoPredictionMarket is Ownable, ReentrancyGuard {
     IERC20 public immutable usdc;
     
     // Simple YES/NO tokens
@@ -27,17 +27,23 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
     string public resolutionCriteria;
     uint256 public creationTime;
     
+    // Demo timing - 1 minute phases for quick demos
+    uint256 public constant SEEDING_DURATION = 1 minutes;
+    uint256 public constant VOTING_DURATION = 1 minutes;
+    
+    // Minimum amounts for demo (0.000001 USDC = 1 wei for 6 decimals)
+    uint256 public constant MIN_SEED_AMOUNT = 1; // 1 wei = 0.000001 USDC
+    uint256 public constant MIN_TRADE_AMOUNT = 1; // 1 wei = 0.000001 USDC
+    
     // Seeding phase - LPs provide initial liquidity
     mapping(address => uint256) public lpContributions;
     uint256 public totalLPContributions;
-    uint256 public constant SEEDING_DURATION = 1 minutes; // Demo timing
     
     // Voting phase - LPs vote on resolution criteria
     mapping(address => string) public proposedCriteria;
     mapping(string => uint256) public criteriaVotes;
     mapping(address => bool) public hasVoted;
     string[] public criteriaOptions;
-    uint256 public constant VOTING_DURATION = 1 minutes; // Demo timing
     
     // AMM reserves for trading
     uint256 public yesReserves;
@@ -56,7 +62,7 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
     constructor(
         address _usdc,
         string memory _question
-    ) Ownable() {
+    ) {
         usdc = IERC20(_usdc);
         question = _question;
         creationTime = block.timestamp;
@@ -74,7 +80,7 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
      */
     function seedLiquidity(uint256 amount) external nonReentrant {
         require(currentPhase == Phase.SEEDING, "Not in seeding phase");
-        require(amount > 0, "Amount must be greater than 0");
+        require(amount >= MIN_SEED_AMOUNT, "Amount below minimum");
         
         // Transfer USDC from LP
         usdc.transferFrom(msg.sender, address(this), amount);
@@ -84,8 +90,6 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
         totalLPContributions += amount;
         
         // Mint 2x tokens to set initial price at $0.5 each
-        // Price = (usdcReserves * 1e6) / tokenReserves
-        // For $0.5 price: tokenReserves = 2 * usdcReserves
         uint256 tokenAmount = amount * 2;
         yesToken.mint(address(this), tokenAmount);
         noToken.mint(address(this), tokenAmount);
@@ -94,7 +98,7 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Transition to voting phase
+     * @dev Transition to voting phase (can be called by anyone after duration)
      */
     function startVoting() external {
         require(currentPhase == Phase.SEEDING, "Not in seeding phase");
@@ -142,7 +146,7 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Transition to trading phase
+     * @dev Transition to trading phase (can be called by anyone after duration)
      */
     function startTrading() external {
         require(currentPhase == Phase.VOTING, "Not in voting phase");
@@ -173,7 +177,7 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
      */
     function buyYes(uint256 usdcAmount) external nonReentrant {
         require(currentPhase == Phase.TRADING, "Not in trading phase");
-        require(usdcAmount > 0, "Amount must be greater than 0");
+        require(usdcAmount >= MIN_TRADE_AMOUNT, "Amount below minimum");
         
         // Calculate YES tokens to receive using constant product formula
         uint256 yesAmount = getAmountOut(usdcAmount, usdcReserves, yesReserves);
@@ -195,7 +199,7 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
      */
     function buyNo(uint256 usdcAmount) external nonReentrant {
         require(currentPhase == Phase.TRADING, "Not in trading phase");
-        require(usdcAmount > 0, "Amount must be greater than 0");
+        require(usdcAmount >= MIN_TRADE_AMOUNT, "Amount below minimum");
         
         // Calculate NO tokens to receive using constant product formula
         uint256 noAmount = getAmountOut(usdcAmount, usdcReserves, noReserves);
@@ -239,6 +243,28 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
         
         yesPrice = (usdcReserves * 1e6) / yesReserves;
         noPrice = (usdcReserves * 1e6) / noReserves;
+    }
+    
+    /**
+     * @dev Get phase timing info
+     */
+    function getPhaseInfo() external view returns (
+        uint256 currentTime,
+        uint256 seedingEndTime,
+        uint256 votingEndTime,
+        uint256 timeToNextPhase
+    ) {
+        currentTime = block.timestamp;
+        seedingEndTime = creationTime + SEEDING_DURATION;
+        votingEndTime = creationTime + SEEDING_DURATION + VOTING_DURATION;
+        
+        if (currentPhase == Phase.SEEDING) {
+            timeToNextPhase = seedingEndTime > currentTime ? seedingEndTime - currentTime : 0;
+        } else if (currentPhase == Phase.VOTING) {
+            timeToNextPhase = votingEndTime > currentTime ? votingEndTime - currentTime : 0;
+        } else {
+            timeToNextPhase = 0;
+        }
     }
     
     /**
