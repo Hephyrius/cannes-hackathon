@@ -32,6 +32,10 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
     uint256 public totalLPContributions;
     uint256 public constant SEEDING_DURATION = 1 minutes; // Demo timing
     
+    // Minimum amounts - works for both 6 and 18 decimal tokens
+    uint256 public constant MIN_SEED_AMOUNT = 1000000000000; // 0.000001 tokens (1e12 wei)
+    uint256 public constant MIN_TRADE_AMOUNT = 1000000000000; // 0.000001 tokens (1e12 wei)
+    
     // Voting phase - LPs vote on resolution criteria
     mapping(address => string) public proposedCriteria;
     mapping(string => uint256) public criteriaVotes;
@@ -74,7 +78,7 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
      */
     function seedLiquidity(uint256 amount) external nonReentrant {
         require(currentPhase == Phase.SEEDING, "Not in seeding phase");
-        require(amount > 0, "Amount must be greater than 0");
+        require(amount >= MIN_SEED_AMOUNT, "Amount below minimum");
         
         // Transfer USDC from LP
         usdc.transferFrom(msg.sender, address(this), amount);
@@ -173,7 +177,7 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
      */
     function buyYes(uint256 usdcAmount) external nonReentrant {
         require(currentPhase == Phase.TRADING, "Not in trading phase");
-        require(usdcAmount > 0, "Amount must be greater than 0");
+        require(usdcAmount >= MIN_TRADE_AMOUNT, "Amount below minimum");
         
         // Calculate YES tokens to receive using constant product formula
         uint256 yesAmount = getAmountOut(usdcAmount, usdcReserves, yesReserves);
@@ -195,7 +199,7 @@ contract SimplePredictionMarket is Ownable, ReentrancyGuard {
      */
     function buyNo(uint256 usdcAmount) external nonReentrant {
         require(currentPhase == Phase.TRADING, "Not in trading phase");
-        require(usdcAmount > 0, "Amount must be greater than 0");
+        require(usdcAmount >= MIN_TRADE_AMOUNT, "Amount below minimum");
         
         // Calculate NO tokens to receive using constant product formula
         uint256 noAmount = getAmountOut(usdcAmount, usdcReserves, noReserves);
